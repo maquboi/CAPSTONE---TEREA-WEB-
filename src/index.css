@@ -2,95 +2,114 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
+/* TEREA Design System - Minimalistic Healthcare Platform
+   Color Palette: Olive #606c38, Dark Green #283618, Cream #fefae0
+   All colors in HSL for consistency
 */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Main Background - Warm cream for comfort */
+    --background: 48 79% 94%;
+    --foreground: 87 32% 15%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    /* Card surfaces - Slightly warmer than background */
+    --card: 48 60% 97%;
+    --card-foreground: 87 32% 15%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    /* Popover - Clean white */
+    --popover: 48 60% 99%;
+    --popover-foreground: 87 32% 15%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Primary - Olive green for main actions */
+    --primary: 82 30% 32%;
+    --primary-foreground: 48 79% 94%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Secondary - Muted olive */
+    --secondary: 82 20% 90%;
+    --secondary-foreground: 87 32% 15%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Muted - Subtle backgrounds */
+    --muted: 48 30% 90%;
+    --muted-foreground: 87 15% 40%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Accent - Light olive tint */
+    --accent: 82 25% 88%;
+    --accent-foreground: 87 32% 15%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    /* Destructive - Soft red for errors */
+    --destructive: 0 65% 55%;
+    --destructive-foreground: 48 79% 94%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    /* Borders and inputs */
+    --border: 82 15% 80%;
+    --input: 82 15% 85%;
+    --ring: 82 30% 32%;
 
     --radius: 0.5rem;
 
-    --sidebar-background: 0 0% 98%;
+    /* Sidebar - Dark green for navigation */
+    --sidebar-background: 87 32% 15%;
+    --sidebar-foreground: 48 50% 90%;
+    --sidebar-primary: 82 30% 45%;
+    --sidebar-primary-foreground: 48 79% 94%;
+    --sidebar-accent: 87 25% 22%;
+    --sidebar-accent-foreground: 48 50% 90%;
+    --sidebar-border: 87 20% 25%;
+    --sidebar-ring: 82 30% 45%;
+    --sidebar-muted: 87 15% 35%;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Custom TEREA tokens */
+    --terea-olive: 82 30% 32%;
+    --terea-dark: 87 32% 15%;
+    --terea-cream: 48 79% 94%;
+    --terea-success: 142 50% 40%;
+    --terea-warning: 38 90% 55%;
+    --terea-info: 200 70% 45%;
+    
+    /* Risk level colors */
+    --risk-high: 0 65% 50%;
+    --risk-medium: 38 90% 55%;
+    --risk-low: 142 50% 45%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 87 32% 10%;
+    --foreground: 48 50% 92%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 87 30% 12%;
+    --card-foreground: 48 50% 92%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 87 30% 12%;
+    --popover-foreground: 48 50% 92%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 82 35% 50%;
+    --primary-foreground: 87 32% 10%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 87 25% 20%;
+    --secondary-foreground: 48 50% 92%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 87 25% 18%;
+    --muted-foreground: 48 30% 60%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 87 25% 20%;
+    --accent-foreground: 48 50% 92%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 60% 45%;
+    --destructive-foreground: 48 50% 92%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --border: 87 20% 22%;
+    --input: 87 20% 22%;
+    --ring: 82 35% 50%;
+
+    --sidebar-background: 87 35% 8%;
+    --sidebar-foreground: 48 50% 90%;
+    --sidebar-primary: 82 35% 55%;
+    --sidebar-primary-foreground: 87 32% 10%;
+    --sidebar-accent: 87 30% 15%;
+    --sidebar-accent-foreground: 48 50% 90%;
+    --sidebar-border: 87 25% 18%;
+    --sidebar-ring: 82 35% 55%;
   }
 }
 
@@ -100,6 +119,46 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Focus visible for accessibility */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}
+
+@layer components {
+  /* Status badges */
+  .status-badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  .status-high-risk {
+    @apply bg-red-100 text-red-800;
+  }
+
+  .status-medium-risk {
+    @apply bg-amber-100 text-amber-800;
+  }
+
+  .status-low-risk {
+    @apply bg-emerald-100 text-emerald-800;
+  }
+
+  /* Card hover effect */
+  .card-hover {
+    @apply transition-all duration-200 hover:shadow-md hover:border-primary/20;
+  }
+
+  /* Sidebar item active state */
+  .sidebar-item-active {
+    @apply bg-sidebar-accent text-sidebar-primary font-medium;
   }
 }
