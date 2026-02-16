@@ -1,75 +1,29 @@
+import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Search, AlertTriangle, AlertCircle, Info } from "lucide-react";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 
 const errorLogs = [
-  {
-    id: 1,
-    level: "error",
-    message: "Database connection timeout",
-    source: "PatientService",
-    timestamp: "2026-02-06 09:15:00",
-    count: 3,
-  },
-  {
-    id: 2,
-    level: "warning",
-    message: "API rate limit approaching",
-    source: "ExternalAPI",
-    timestamp: "2026-02-06 08:45:00",
-    count: 1,
-  },
-  {
-    id: 3,
-    level: "error",
-    message: "Failed to sync patient data",
-    source: "SyncService",
-    timestamp: "2026-02-05 16:30:00",
-    count: 5,
-  },
-  {
-    id: 4,
-    level: "info",
-    message: "Scheduled backup completed",
-    source: "BackupService",
-    timestamp: "2026-02-05 02:00:00",
-    count: 1,
-  },
-  {
-    id: 5,
-    level: "warning",
-    message: "High memory usage detected",
-    source: "SystemMonitor",
-    timestamp: "2026-02-04 14:20:00",
-    count: 2,
-  },
+  { id: 1, level: "error", message: "Database connection timeout", source: "PatientService", timestamp: "2026-02-06 09:15:00", count: 3 },
+  { id: 2, level: "warning", message: "API rate limit approaching", source: "ExternalAPI", timestamp: "2026-02-06 08:45:00", count: 1 },
+  { id: 3, level: "error", message: "Failed to sync patient data", source: "SyncService", timestamp: "2026-02-05 16:30:00", count: 5 },
+  { id: 4, level: "info", message: "Scheduled backup completed", source: "BackupService", timestamp: "2026-02-05 02:00:00", count: 1 },
+  { id: 5, level: "warning", message: "High memory usage detected", source: "SystemMonitor", timestamp: "2026-02-04 14:20:00", count: 2 },
 ];
 
 const getLevelIcon = (level: string) => {
   switch (level) {
-    case "error":
-      return <AlertCircle className="h-4 w-4 text-status-danger" />;
-    case "warning":
-      return <AlertTriangle className="h-4 w-4 text-status-warning" />;
-    default:
-      return <Info className="h-4 w-4 text-primary" />;
+    case "error": return <AlertCircle className="h-4 w-4 text-status-danger" />;
+    case "warning": return <AlertTriangle className="h-4 w-4 text-status-warning" />;
+    default: return <Info className="h-4 w-4 text-primary" />;
   }
 };
 
@@ -83,16 +37,23 @@ const getLevelBadge = (level: string) => {
 };
 
 export default function ErrorLogs() {
+  const [search, setSearch] = useState("");
+  const [levelFilter, setLevelFilter] = useState("all");
+
+  const filtered = errorLogs.filter((log) => {
+    const matchesSearch = search === "" ||
+      log.message.toLowerCase().includes(search.toLowerCase()) ||
+      log.source.toLowerCase().includes(search.toLowerCase());
+    const matchesLevel = levelFilter === "all" || log.level === levelFilter;
+    return matchesSearch && matchesLevel;
+  });
+
   return (
     <DashboardLayout role="admin" userName="Admin User">
       <div className="space-y-6 animate-fade-in">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Error Logs
-          </h1>
-          <p className="text-muted-foreground">
-            Monitor system errors and warnings
-          </p>
+          <h1 className="text-2xl font-semibold tracking-tight">Error Logs</h1>
+          <p className="text-muted-foreground">Monitor system errors and warnings</p>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
@@ -103,7 +64,7 @@ export default function ErrorLogs() {
                   <AlertCircle className="h-5 w-5 text-status-danger" />
                 </div>
                 <div>
-                  <p className="text-2xl font-semibold">8</p>
+                  <p className="text-2xl font-semibold">{errorLogs.filter(l => l.level === "error").reduce((a, l) => a + l.count, 0)}</p>
                   <p className="text-sm text-muted-foreground">Errors (24h)</p>
                 </div>
               </div>
@@ -116,7 +77,7 @@ export default function ErrorLogs() {
                   <AlertTriangle className="h-5 w-5 text-status-warning" />
                 </div>
                 <div>
-                  <p className="text-2xl font-semibold">3</p>
+                  <p className="text-2xl font-semibold">{errorLogs.filter(l => l.level === "warning").reduce((a, l) => a + l.count, 0)}</p>
                   <p className="text-sm text-muted-foreground">Warnings (24h)</p>
                 </div>
               </div>
@@ -129,7 +90,7 @@ export default function ErrorLogs() {
                   <Info className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-2xl font-semibold">12</p>
+                  <p className="text-2xl font-semibold">{errorLogs.filter(l => l.level === "info").reduce((a, l) => a + l.count, 0)}</p>
                   <p className="text-sm text-muted-foreground">Info (24h)</p>
                 </div>
               </div>
@@ -144,12 +105,10 @@ export default function ErrorLogs() {
               <div className="flex items-center gap-2">
                 <div className="relative w-64">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Search logs..." className="pl-8" />
+                  <Input placeholder="Search logs..." className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
                 </div>
-                <Select defaultValue="all">
-                  <SelectTrigger className="w-32">
-                    <SelectValue placeholder="Level" />
-                  </SelectTrigger>
+                <Select value={levelFilter} onValueChange={setLevelFilter}>
+                  <SelectTrigger className="w-32"><SelectValue placeholder="Level" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Levels</SelectItem>
                     <SelectItem value="error">Errors</SelectItem>
@@ -173,24 +132,21 @@ export default function ErrorLogs() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {errorLogs.map((log) => (
+                {filtered.map((log) => (
                   <TableRow key={log.id}>
                     <TableCell>{getLevelIcon(log.level)}</TableCell>
-                    <TableCell>
-                      <Badge className={getLevelBadge(log.level)}>
-                        {log.level.toUpperCase()}
-                      </Badge>
-                    </TableCell>
+                    <TableCell><Badge className={getLevelBadge(log.level)}>{log.level.toUpperCase()}</Badge></TableCell>
                     <TableCell className="font-medium">{log.message}</TableCell>
                     <TableCell className="text-muted-foreground">{log.source}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{log.count}</Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {log.timestamp}
-                    </TableCell>
+                    <TableCell><Badge variant="secondary">{log.count}</Badge></TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{log.timestamp}</TableCell>
                   </TableRow>
                 ))}
+                {filtered.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">No logs found</TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </CardContent>
