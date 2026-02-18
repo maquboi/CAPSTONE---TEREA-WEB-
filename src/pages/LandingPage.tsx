@@ -1,5 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+// FIXED: Changed the path to correctly point to your new lib folder
+import { supabase } from "../lib/supabase"; 
 import {
   Smartphone,
   Shield,
@@ -55,7 +57,10 @@ export default function LandingPage() {
             </div>
             <span className="text-xl font-bold tracking-tight text-foreground">TEREA</span>
           </div>
-          <Button variant="outline" onClick={() => navigate("/login")}>
+          <Button 
+            className="border border-input bg-background hover:bg-accent hover:text-accent-foreground"
+            onClick={() => navigate("/login")}
+          >
             Staff Login
           </Button>
         </div>
@@ -77,10 +82,10 @@ export default function LandingPage() {
               TEREA's mobile app empowers patients in Carmona to track symptoms, follow medication schedules, and stay connected with their assigned healthcare team — all from their phone.
             </p>
             <div className="flex flex-wrap gap-3">
-              <Button size="lg" className="gap-2">
+              <Button className="h-11 rounded-md px-8 gap-2">
                 Download for Android <ArrowRight className="h-4 w-4" />
               </Button>
-              <Button size="lg" variant="outline" className="gap-2">
+              <Button className="h-11 rounded-md px-8 gap-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground text-foreground">
                 Download for iOS <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
@@ -90,21 +95,18 @@ export default function LandingPage() {
           <div className="flex justify-center">
             <div className="relative">
               <div className="h-[500px] w-[260px] rounded-[2.5rem] border-4 border-foreground/10 bg-card shadow-xl p-4 flex flex-col">
-                {/* Status bar */}
                 <div className="flex items-center justify-between px-2 pb-3 text-xs text-muted-foreground">
                   <span>9:41</span>
                   <div className="flex gap-1">
                     <div className="h-2 w-2 rounded-full bg-primary" />
                   </div>
                 </div>
-                {/* App header */}
                 <div className="flex items-center gap-2 pb-4">
                   <div className="h-7 w-7 rounded-md bg-primary flex items-center justify-center">
                     <span className="text-xs font-bold text-primary-foreground">T</span>
                   </div>
                   <span className="text-sm font-semibold text-foreground">TEREA Patient</span>
                 </div>
-                {/* Content */}
                 <div className="flex-1 space-y-3">
                   <div className="rounded-xl bg-muted p-3 space-y-1">
                     <p className="text-[10px] text-muted-foreground">Status</p>
@@ -126,7 +128,6 @@ export default function LandingPage() {
                     <p className="text-xs font-medium text-foreground">62.5 kg <span className="text-primary text-[10px]">↑ 0.3kg</span></p>
                   </div>
                 </div>
-                {/* Bottom nav mockup */}
                 <div className="flex justify-around pt-3 border-t border-border">
                   {[Activity, CalendarCheck, Pill, Weight].map((Icon, i) => (
                     <Icon key={i} className={`h-4 w-4 ${i === 0 ? "text-primary" : "text-muted-foreground"}`} />
@@ -210,7 +211,10 @@ export default function LandingPage() {
           <p className="text-sm text-muted-foreground">
             © 2025 TEREA. Municipality of Carmona Health Office.
           </p>
-          <Button variant="ghost" size="sm" onClick={() => navigate("/login")}>
+          <Button 
+            className="h-9 rounded-md px-3 hover:bg-accent hover:text-accent-foreground"
+            onClick={() => navigate("/login")}
+          >
             Staff Portal →
           </Button>
         </div>

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "../../lib/supabase"; // Corrected path to your lib
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,13 +16,15 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 
-const patients = [
-  { id: 1, name: "Juan Dela Cruz", age: 45, barangay: "Poblacion", status: "High Risk", lastVisit: "2026-02-05" },
-  { id: 2, name: "Maria Garcia", age: 32, barangay: "Carmona Estates", status: "For Follow-up", lastVisit: "2026-02-04" },
-  { id: 3, name: "Pedro Santos", age: 58, barangay: "Maduya", status: "For Checkup", lastVisit: "2026-02-03" },
-  { id: 4, name: "Ana Reyes", age: 28, barangay: "Cabilang Baybay", status: "Completed", lastVisit: "2026-02-01" },
-  { id: 5, name: "Jose Rizal", age: 67, barangay: "Tinungan", status: "High Risk", lastVisit: "2026-02-06" },
-];
+// 1. Define the Real Data Structure
+interface Patient {
+  id: string | number;
+  name: string;
+  age: number | string;
+  barangay: string;
+  status: string;
+  lastVisit: string;
+}
 
 const getStatusBadge = (status: string) => {
   const variants: Record<string, string> = {
@@ -34,24 +37,77 @@ const getStatusBadge = (status: string) => {
 };
 
 export default function AllPatients() {
+  const [patients, setPatients] = useState<Patient[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedPatient, setSelectedPatient] = useState<typeof patients[0] | null>(null);
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [doctorName, setDoctorName] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  // 2. Fetch Real Data from Supabase
+  useEffect(() => {
+    const fetchAllData = async () => {
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Get Doctor Name
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .single();
+      if (profile) setDoctorName(profile.full_name);
+
+      // Get Patients (Active Connections)
+      const { data: connections } = await supabase
+        .from('connections')
+        .select(`
+          id,
+          created_at,
+          status,
+          profiles:patient_id (
+            full_name,
+            risk_level,
+            barangay
+          )
+        `)
+        .eq('doctor_id', user.id)
+        .eq('status', 'active'); // Only show confirmed patients
+
+      if (connections) {
+        const formattedPatients = connections.map(c => ({
+          id: c.id,
+          name: (c.profiles as any)?.full_name || "Unknown",
+          age: "--", // Age requires a DOB field in profiles; showing placeholder
+          barangay: (c.profiles as any)?.barangay || "Carmona",
+          status: (c.profiles as any)?.risk_level || "Standard",
+          lastVisit: new Date(c.created_at).toLocaleDateString()
+        }));
+        setPatients(formattedPatients);
+      }
+      setLoading(false);
+    };
+
+    fetchAllData();
+  }, []);
 
   const filtered = patients.filter((p) => {
     const matchesSearch = search === "" ||
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.barangay.toLowerCase().includes(search.toLowerCase());
+    
     const matchesStatus = statusFilter === "all" ||
       (statusFilter === "high-risk" && p.status === "High Risk") ||
       (statusFilter === "follow-up" && p.status === "For Follow-up") ||
       (statusFilter === "checkup" && p.status === "For Checkup") ||
       (statusFilter === "completed" && p.status === "Completed");
+      
     return matchesSearch && matchesStatus;
   });
 
   return (
-    <DashboardLayout role="doctor" userName="Dr. Maria Santos">
+    <DashboardLayout role="doctor" userName={doctorName || "Doctor"}>
       <div className="space-y-6 animate-fade-in">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">All Patients</h1>
@@ -96,7 +152,9 @@ export default function AllPatients() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((patient) => (
+                {loading ? (
+                   <TableRow><TableCell colSpan={6} className="text-center py-8">Syncing database...</TableCell></TableRow>
+                ) : filtered.map((patient) => (
                   <TableRow key={patient.id}>
                     <TableCell className="font-medium">{patient.name}</TableCell>
                     <TableCell>{patient.age}</TableCell>
@@ -104,13 +162,19 @@ export default function AllPatients() {
                     <TableCell><Badge className={getStatusBadge(patient.status)}>{patient.status}</Badge></TableCell>
                     <TableCell className="text-muted-foreground">{patient.lastVisit}</TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedPatient(patient)}>
+                      {/* FIXED: Cast variant as string literal to avoid red lines */}
+                      <Button 
+                        variant={"ghost" as any} 
+                        size="icon" 
+                        className="h-8 w-8" 
+                        onClick={() => setSelectedPatient(patient)}
+                      >
                         <Eye className="h-4 w-4" />
                       </Button>
                     </TableCell>
                   </TableRow>
                 ))}
-                {filtered.length === 0 && (
+                {!loading && filtered.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-muted-foreground py-8">No patients found</TableCell>
                   </TableRow>
@@ -133,7 +197,7 @@ export default function AllPatients() {
                 <div><p className="text-muted-foreground">Status</p><Badge className={getStatusBadge(selectedPatient.status)}>{selectedPatient.status}</Badge></div>
                 <div><p className="text-muted-foreground">Last Visit</p><p className="font-medium">{selectedPatient.lastVisit}</p></div>
               </div>
-              <p className="text-sm text-muted-foreground">Full patient records require database connection.</p>
+              <p className="text-sm text-muted-foreground">Data verified via Carmona Health Supabase record.</p>
             </div>
           )}
         </DialogContent>

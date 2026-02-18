@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "../../lib/supabase"; // Path to your supabase config
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PatientQueueTable } from "@/components/dashboard/PatientQueueTable";
 import { Button } from "@/components/ui/button";
@@ -14,13 +15,33 @@ export default function PatientQueue() {
   const [search, setSearch] = useState("");
   const [riskFilter, setRiskFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  
+  // NEW: Dynamic Doctor Identity
+  const [doctorName, setDoctorName] = useState("");
+
+  useEffect(() => {
+    const fetchDoctorProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .single();
+      
+      if (profile) setDoctorName(profile.full_name);
+    };
+
+    fetchDoctorProfile();
+  }, []);
 
   const handleExport = () => {
     toast({ title: "Export started", description: "Patient queue list is being exported..." });
   };
 
   return (
-    <DashboardLayout role="doctor" userName="Dr. Maria Santos">
+    <DashboardLayout role="doctor" userName={doctorName || "Doctor"}>
       <div className="space-y-6 animate-fade-in">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -36,7 +57,12 @@ export default function PatientQueue() {
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Search patients..." className="pl-9 bg-card" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input 
+              placeholder="Search patients..." 
+              className="pl-9 bg-card" 
+              value={search} 
+              onChange={(e) => setSearch(e.target.value)} 
+            />
           </div>
           <Select value={riskFilter} onValueChange={setRiskFilter}>
             <SelectTrigger className="w-full sm:w-40 bg-card"><SelectValue placeholder="Risk Level" /></SelectTrigger>
@@ -56,11 +82,17 @@ export default function PatientQueue() {
               <SelectItem value="for-followup">For Follow-up</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" size="icon" className="shrink-0" onClick={() => { setSearch(""); setRiskFilter("all"); setStatusFilter("all"); }}>
+          <Button 
+            variant="outline" 
+            size="icon" 
+            className="shrink-0" 
+            onClick={() => { setSearch(""); setRiskFilter("all"); setStatusFilter("all"); }}
+          >
             <Filter className="h-4 w-4" />
           </Button>
         </div>
 
+        {/* The data fetching and filtering logic will be handled inside this component */}
         <PatientQueueTable search={search} riskFilter={riskFilter} statusFilter={statusFilter} />
       </div>
     </DashboardLayout>

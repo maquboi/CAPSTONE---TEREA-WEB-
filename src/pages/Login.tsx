@@ -4,6 +4,8 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+// FIXED: Import Supabase to enable real login
+import { supabase } from "../lib/supabase";
 import {
   Select,
   SelectContent,
@@ -32,16 +34,51 @@ export default function Login() {
 
     setIsLoading(true);
 
-    // Simulate login delay
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    try {
+      // 1. REAL LOGIN: Check credentials with Supabase
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    setIsLoading(false);
+      if (authError) {
+        throw new Error("Invalid email or password");
+      }
 
-    // Navigate based on role
-    if (role === "admin") {
-      navigate("/admin/dashboard");
-    } else if (role === "doctor") {
-      navigate("/doctor/dashboard");
+      if (!authData.user) throw new Error("User not found");
+
+      // 2. VERIFY ROLE: Check the 'profiles' table for the actual role
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (profileError || !profile) {
+        throw new Error("Profile not found. Contact IT support.");
+      }
+
+      // 3. SECURITY CHECK: Ensure the selected role matches the database role
+      if (profile.role !== role) {
+        throw new Error(`This account is not registered as a ${role}.`);
+      }
+
+      // 4. SUCCESS: Navigate to the correct dashboard
+      if (profile.role === "admin") {
+        navigate("/admin/dashboard");
+      } else if (profile.role === "doctor") {
+        navigate("/doctor/dashboard");
+      } else {
+        setError("Unauthorized access.");
+      }
+
+    } catch (err: any) {
+      // Show actual error message
+      setError(err.message || "Failed to sign in");
+      // If login failed, make sure we aren't holding onto a session
+      await supabase.auth.signOut();
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -180,10 +217,10 @@ export default function Login() {
               </div>
             </div>
 
+            {/* FIXED: Removed size="lg" to prevent crash, replaced with explicit height/width */}
             <Button
               type="submit"
-              className="w-full"
-              size="lg"
+              className="w-full h-11"
               disabled={isLoading}
             >
               {isLoading ? (
