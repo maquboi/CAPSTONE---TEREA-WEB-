@@ -30,6 +30,7 @@ import Appointments from "./pages/doctor/Appointments";
 import ActivityLogs from "./pages/doctor/ActivityLogs";
 import DoctorProfile from "./pages/doctor/Profile";
 import DoctorSettings from "./pages/doctor/Settings";
+import PatientDetail from "./pages/doctor/PatientDetail"; // <-- ADDED: Import the new detail page
 
 const queryClient = new QueryClient();
 
@@ -65,6 +66,9 @@ const App = () => (
           <Route path="/doctor/activity" element={<ActivityLogs />} />
           <Route path="/doctor/profile" element={<DoctorProfile />} />
           <Route path="/doctor/settings" element={<DoctorSettings />} />
+          
+          {/* ADDED: Dynamic Route for viewing a specific patient */}
+          <Route path="/doctor/patient/:id" element={<PatientDetail />} />
           
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
