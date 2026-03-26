@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "../../lib/supabase"; // Ensure this path is correct
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,29 +12,61 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 
-const activityLogs = [
-  { id: 1, action: "Appointment Scheduled", patient: "Juan Dela Cruz", details: "Follow-up on Feb 10, 2026", timestamp: "2026-02-06 09:15:00" },
-  { id: 2, action: "Patient Status Updated", patient: "Maria Garcia", details: "Changed to 'For Follow-up'", timestamp: "2026-02-06 08:45:00" },
-  { id: 3, action: "Reminder Sent", patient: "Pedro Santos", details: "Medication reminder via SMS", timestamp: "2026-02-05 16:30:00" },
-  { id: 4, action: "Lab Results Reviewed", patient: "Ana Reyes", details: "Sputum test results reviewed", timestamp: "2026-02-05 14:20:00" },
-  { id: 5, action: "Follow-up Completed", patient: "Jose Rizal", details: "Clinic visit completed", timestamp: "2026-02-05 11:00:00" },
-  { id: 6, action: "New Patient Assigned", patient: "Carlo Mendoza", details: "High-risk patient assigned", timestamp: "2026-02-04 15:30:00" },
-];
-
 export default function ActivityLogs() {
+  const [activityLogs, setActivityLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState("all");
 
+  // --- FETCH DATA FROM SUPABASE ---
+  const fetchLogs = async () => {
+    try {
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('activity_logs')
+        .select('*')
+        .eq('doctor_id', user.id)
+        .order('timestamp', { ascending: false });
+
+      if (error) throw error;
+      setActivityLogs(data || []);
+    } catch (error) {
+      console.error("Error fetching logs:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLogs();
+
+    // Real-time subscription to see new logs immediately
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on('postgres_changes', 
+        { event: 'INSERT', schema: 'public', table: 'activity_logs' }, 
+        () => fetchLogs()
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
   const filtered = activityLogs.filter((log) => {
     const matchesSearch = search === "" ||
-      log.action.toLowerCase().includes(search.toLowerCase()) ||
-      log.patient.toLowerCase().includes(search.toLowerCase()) ||
-      log.details.toLowerCase().includes(search.toLowerCase());
+      log.action?.toLowerCase().includes(search.toLowerCase()) ||
+      log.patient?.toLowerCase().includes(search.toLowerCase()) ||
+      log.details?.toLowerCase().includes(search.toLowerCase());
+    
     const matchesAction = actionFilter === "all" ||
-      (actionFilter === "appointments" && log.action.includes("Appointment")) ||
-      (actionFilter === "status" && log.action.includes("Status")) ||
-      (actionFilter === "reminders" && log.action.includes("Reminder")) ||
-      (actionFilter === "reviews" && log.action.includes("Review"));
+      (actionFilter === "appointments" && log.action?.includes("Appointment")) ||
+      (actionFilter === "status" && log.action?.includes("Status")) ||
+      (actionFilter === "reminders" && log.action?.includes("Reminder")) ||
+      (actionFilter === "reviews" && log.action?.includes("Review"));
+      
     return matchesSearch && matchesAction;
   });
 
@@ -52,7 +85,12 @@ export default function ActivityLogs() {
               <div className="flex items-center gap-2">
                 <div className="relative w-64">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Search activity..." className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
+                  <Input 
+                    placeholder="Search activity..." 
+                    className="pl-8" 
+                    value={search} 
+                    onChange={(e) => setSearch(e.target.value)} 
+                  />
                 </div>
                 <Select value={actionFilter} onValueChange={setActionFilter}>
                   <SelectTrigger className="w-48">
@@ -81,17 +119,30 @@ export default function ActivityLogs() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell><Badge variant="outline">{log.action}</Badge></TableCell>
-                    <TableCell className="font-medium">{log.patient}</TableCell>
-                    <TableCell className="text-muted-foreground">{log.details}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{log.timestamp}</TableCell>
-                  </TableRow>
-                ))}
-                {filtered.length === 0 && (
+                {loading ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground py-8">No activity found</TableCell>
+                    <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">Loading logs...</TableCell>
+                  </TableRow>
+                ) : filtered.length > 0 ? (
+                  filtered.map((log) => (
+                    <TableRow key={log.id}>
+                      <TableCell>
+                        <Badge variant="outline">{log.action}</Badge>
+                      </TableCell>
+                      <TableCell className="font-medium">{log.patient}</TableCell>
+                      <TableCell className="text-muted-foreground">{log.details}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {new Date(log.timestamp).toLocaleString()}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-muted-foreground py-12">
+                      {activityLogs.length === 0 
+                        ? "No activity logs recorded yet." 
+                        : "No activity found matching your filters."}
+                    </TableCell>
                   </TableRow>
                 )}
               </TableBody>

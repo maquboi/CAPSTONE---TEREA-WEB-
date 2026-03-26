@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { supabase } from "../../lib/supabase"; // Corrected path to your lib
+import { useNavigate } from "react-router-dom";
+import { supabase } from "../../lib/supabase"; 
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,39 +9,36 @@ import { Badge } from "@/components/ui/badge";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Search, Filter, Eye } from "lucide-react";
+import { Search, Filter, Eye, Download, Users } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
 
-// 1. Define the Real Data Structure
+// 1. Define the Data Structure
 interface Patient {
-  id: string | number;
+  id: string; // The UUID used for navigation
   name: string;
-  age: number | string;
+  age: string;
   barangay: string;
-  status: string;
+  riskLevel: string;
   lastVisit: string;
 }
 
-const getStatusBadge = (status: string) => {
-  const variants: Record<string, string> = {
-    "High Risk": "bg-status-danger text-white",
-    "For Follow-up": "bg-status-warning text-sidebar-foreground",
-    "For Checkup": "bg-primary text-primary-foreground",
-    "Completed": "bg-status-success text-white",
-  };
-  return variants[status] || "";
+const getRiskBadge = (risk: string) => {
+  const lowerRisk = risk?.toLowerCase() || "";
+  if (lowerRisk.includes("high")) return "bg-red-50 text-red-600 border-red-200";
+  if (lowerRisk.includes("medium") || lowerRisk.includes("follow-up")) return "bg-amber-50 text-amber-600 border-amber-200";
+  return "bg-green-50 text-green-600 border-green-200";
 };
 
 export default function AllPatients() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  
   const [patients, setPatients] = useState<Patient[]>([]);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [riskFilter, setRiskFilter] = useState("all");
   const [doctorName, setDoctorName] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -48,160 +46,197 @@ export default function AllPatients() {
   useEffect(() => {
     const fetchAllData = async () => {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
 
-      // Get Doctor Name
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', user.id)
-        .single();
-      if (profile) setDoctorName(profile.full_name);
+        // Get Doctor Name
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', user.id)
+          .single();
+          
+        if (profile) setDoctorName(profile.full_name);
 
-      // Get Patients (Active Connections)
-      const { data: connections } = await supabase
-        .from('connections')
-        .select(`
-          id,
-          created_at,
-          status,
-          profiles:patient_id (
-            full_name,
-            risk_level,
-            barangay
-          )
-        `)
-        .eq('doctor_id', user.id)
-        .eq('status', 'active'); // Only show confirmed patients
+        // Fetching connections joined with profiles (including the 'age' column)
+        const { data: connections, error } = await supabase
+          .from('connections')
+          .select(`
+            patient_id,
+            created_at,
+            status,
+            profiles!fk_patient (
+              full_name,
+              age,
+              risk_level,
+              barangay
+            )
+          `)
+          .eq('doctor_id', user.id)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false });
 
-      if (connections) {
-        const formattedPatients = connections.map(c => ({
-          id: c.id,
-          name: (c.profiles as any)?.full_name || "Unknown",
-          age: "--", // Age requires a DOB field in profiles; showing placeholder
-          barangay: (c.profiles as any)?.barangay || "Carmona",
-          status: (c.profiles as any)?.risk_level || "Standard",
-          lastVisit: new Date(c.created_at).toLocaleDateString()
-        }));
-        setPatients(formattedPatients);
+        if (error) throw error;
+
+        if (connections) {
+          const uniquePatients = new Map();
+          
+          connections.forEach(c => {
+            if (!uniquePatients.has(c.patient_id)) {
+              // Extracting profile data safely
+              const p = Array.isArray(c.profiles) ? c.profiles[0] : c.profiles;
+              
+              uniquePatients.set(c.patient_id, {
+                id: c.patient_id, // Pass this to the navigate function
+                name: p?.full_name || "Unknown Patient",
+                age: (p?.age !== null && p?.age !== undefined && p?.age !== "") ? p.age.toString() : "--", 
+                barangay: p?.barangay || "Carmona",
+                riskLevel: p?.risk_level || "Standard",
+                lastVisit: new Date(c.created_at).toLocaleDateString()
+              });
+            }
+          });
+          
+          setPatients(Array.from(uniquePatients.values()));
+        }
+      } catch (err: any) {
+        console.error("Fetch Error:", err.message);
+        toast({ variant: "destructive", title: "Sync Error", description: "Could not sync patient list." });
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     fetchAllData();
   }, []);
+
+  const handleExport = () => {
+    toast({ 
+      title: "Generating Report", 
+      description: "Patient directory list is being exported..." 
+    });
+  };
 
   const filtered = patients.filter((p) => {
     const matchesSearch = search === "" ||
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.barangay.toLowerCase().includes(search.toLowerCase());
     
-    const matchesStatus = statusFilter === "all" ||
-      (statusFilter === "high-risk" && p.status === "High Risk") ||
-      (statusFilter === "follow-up" && p.status === "For Follow-up") ||
-      (statusFilter === "checkup" && p.status === "For Checkup") ||
-      (statusFilter === "completed" && p.status === "Completed");
+    const matchesRisk = riskFilter === "all" ||
+      (riskFilter === "high-risk" && p.riskLevel.toLowerCase().includes("high")) ||
+      (riskFilter === "medium-risk" && p.riskLevel.toLowerCase().includes("medium")) ||
+      (riskFilter === "standard" && (p.riskLevel.toLowerCase().includes("standard") || p.riskLevel.toLowerCase().includes("low")));
       
-    return matchesSearch && matchesStatus;
+    return matchesSearch && matchesRisk;
   });
 
   return (
     <DashboardLayout role="doctor" userName={doctorName || "Doctor"}>
       <div className="space-y-6 animate-fade-in">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">All Patients</h1>
-          <p className="text-muted-foreground">View and manage all assigned patients</p>
+        
+        {/* Page Header */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-extrabold tracking-tight text-[#2D3B1E]">Patient Directory & Reports</h1>
+            <p className="text-[#606C38]/80 font-medium mt-1">Manage verified patients and review risk assessments.</p>
+          </div>
+          <Button 
+            className="gap-2 bg-[#606C38] hover:bg-[#2D3B1E] text-white" 
+            onClick={handleExport}
+          >
+            <Download className="h-4 w-4" />
+            Export Patient List
+          </Button>
         </div>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Patient Directory</CardTitle>
-              <div className="flex items-center gap-2">
-                <div className="relative w-64">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Search patients..." className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
-                </div>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-40">
-                    <Filter className="mr-2 h-4 w-4" />
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="high-risk">High Risk</SelectItem>
-                    <SelectItem value="follow-up">For Follow-up</SelectItem>
-                    <SelectItem value="checkup">For Checkup</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+        {/* Filter Bar */}
+        <div className="flex flex-col gap-3 sm:flex-row bg-white p-4 rounded-xl border border-[#DDE5B6] shadow-sm">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input 
+              placeholder="Search by name or barangay..." 
+              className="pl-9 bg-[#FEFAE0]/30 border-[#DDE5B6] focus-visible:ring-[#606C38]" 
+              value={search} 
+              onChange={(e) => setSearch(e.target.value)} 
+            />
+          </div>
+          <Select value={riskFilter} onValueChange={setRiskFilter}>
+            <SelectTrigger className="w-full sm:w-48 bg-[#FEFAE0]/30 border-[#DDE5B6]">
+              <SelectValue placeholder="Risk Level" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Risk Levels</SelectItem>
+              <SelectItem value="high-risk">High Risk</SelectItem>
+              <SelectItem value="medium-risk">Medium Risk</SelectItem>
+              <SelectItem value="standard">Standard / Low</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button 
+            variant="outline" 
+            className="shrink-0 border-[#DDE5B6] text-[#606C38] hover:bg-[#FEFAE0]" 
+            onClick={() => { setSearch(""); setRiskFilter("all"); }}
+          >
+            <Filter className="h-4 w-4 mr-2" />
+            Reset Filters
+          </Button>
+        </div>
+
+        {/* Patient Table */}
+        <Card className="border-[#DDE5B6] shadow-sm">
+          <CardHeader className="pb-3 border-b border-[#DDE5B6]/50 bg-[#FEFAE0]/20">
+            <CardTitle className="text-base flex items-center gap-2 text-[#2D3B1E]">
+              <Users className="h-5 w-5 text-[#606C38]" /> 
+              Patient Records
+            </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             <Table>
-              <TableHeader>
+              <TableHeader className="bg-[#FEFAE0]/50">
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Age</TableHead>
-                  <TableHead>Barangay</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Last Visit</TableHead>
-                  <TableHead className="w-10"></TableHead>
+                  <TableHead className="pl-6 text-[#2D3B1E] font-bold">Name</TableHead>
+                  <TableHead className="text-[#2D3B1E] font-bold">Age</TableHead>
+                  <TableHead className="text-[#2D3B1E] font-bold">Barangay</TableHead>
+                  <TableHead className="text-[#2D3B1E] font-bold">Risk Level</TableHead>
+                  <TableHead className="text-[#2D3B1E] font-bold">Registration Date</TableHead>
+                  <TableHead className="text-right pr-6 text-[#2D3B1E] font-bold">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
-                   <TableRow><TableCell colSpan={6} className="text-center py-8">Syncing database...</TableCell></TableRow>
+                   <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground">Syncing with database...</TableCell></TableRow>
+                ) : filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-10 italic">No patients found.</TableCell>
+                  </TableRow>
                 ) : filtered.map((patient) => (
-                  <TableRow key={patient.id}>
-                    <TableCell className="font-medium">{patient.name}</TableCell>
-                    <TableCell>{patient.age}</TableCell>
+                  <TableRow key={patient.id} className="hover:bg-[#FEFAE0]/30">
+                    <TableCell className="font-semibold text-[#2D3B1E] pl-6">{patient.name}</TableCell>
+                    <TableCell className="font-medium text-[#2D3B1E]">{patient.age}</TableCell>
                     <TableCell className="text-muted-foreground">{patient.barangay}</TableCell>
-                    <TableCell><Badge className={getStatusBadge(patient.status)}>{patient.status}</Badge></TableCell>
-                    <TableCell className="text-muted-foreground">{patient.lastVisit}</TableCell>
                     <TableCell>
-                      {/* FIXED: Cast variant as string literal to avoid red lines */}
+                      <Badge variant="outline" className={getRiskBadge(patient.riskLevel)}>
+                        {patient.riskLevel}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{patient.lastVisit}</TableCell>
+                    <TableCell className="text-right pr-6">
                       <Button 
-                        variant={"ghost" as any} 
-                        size="icon" 
-                        className="h-8 w-8" 
-                        onClick={() => setSelectedPatient(patient)}
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-[#606C38] hover:bg-[#606C38] hover:text-white transition-colors" 
+                        onClick={() => navigate(`/doctor/patient-details/${patient.id}`)}
                       >
-                        <Eye className="h-4 w-4" />
+                        <Eye className="h-4 w-4 mr-1.5" /> View Details
                       </Button>
                     </TableCell>
                   </TableRow>
                 ))}
-                {!loading && filtered.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">No patients found</TableCell>
-                  </TableRow>
-                )}
               </TableBody>
             </Table>
           </CardContent>
         </Card>
       </div>
-
-      <Dialog open={!!selectedPatient} onOpenChange={() => setSelectedPatient(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Patient Details</DialogTitle></DialogHeader>
-          {selectedPatient && (
-            <div className="space-y-4 py-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><p className="text-muted-foreground">Name</p><p className="font-medium">{selectedPatient.name}</p></div>
-                <div><p className="text-muted-foreground">Age</p><p className="font-medium">{selectedPatient.age}</p></div>
-                <div><p className="text-muted-foreground">Barangay</p><p className="font-medium">{selectedPatient.barangay}</p></div>
-                <div><p className="text-muted-foreground">Status</p><Badge className={getStatusBadge(selectedPatient.status)}>{selectedPatient.status}</Badge></div>
-                <div><p className="text-muted-foreground">Last Visit</p><p className="font-medium">{selectedPatient.lastVisit}</p></div>
-              </div>
-              <p className="text-sm text-muted-foreground">Data verified via Carmona Health Supabase record.</p>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </DashboardLayout>
   );
 }

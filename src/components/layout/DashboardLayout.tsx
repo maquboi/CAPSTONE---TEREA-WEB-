@@ -11,7 +11,7 @@ interface DashboardLayoutProps {
 export function DashboardLayout({
   children,
   role,
-  userName = "Dr. Maria Santos",
+  userName = "Doctor", // <-- Fixed: Removed the hardcoded "Dr. Maria Santos"
 }: DashboardLayoutProps) {
   const userRole = role === "admin" ? "Admin" : "Doctor";
 

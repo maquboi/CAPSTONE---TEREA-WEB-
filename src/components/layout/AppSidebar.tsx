@@ -73,15 +73,14 @@ const doctorNavSections: NavSection[] = [
   {
     title: "Patients",
     items: [
-      { title: "Patient Queue", href: "/doctor/queue", icon: ClipboardList, badge: 5 },
-      { title: "All Patients", href: "/doctor/patients", icon: Users },
-      { title: "Follow-up Tracker", href: "/doctor/follow-ups", icon: Activity },
+      { title: "Patients", href: "/doctor/patients", icon: Users },
+      { title: "Tracker", href: "/doctor/follow-ups", icon: Activity },
     ],
   },
   {
     title: "Schedule",
     items: [
-      { title: "Appointments", href: "/doctor/appointments", icon: Calendar },
+      { title: "Reports", href: "/doctor/appointments", icon: Calendar },
       { title: "Activity Logs", href: "/doctor/activity", icon: FileText },
     ],
   },

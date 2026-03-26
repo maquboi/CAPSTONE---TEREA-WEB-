@@ -1,148 +1,150 @@
+import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Clock, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { 
+  FileText, 
+  Download, 
+  Search, 
+  ArrowUpDown, 
+  Filter 
+} from "lucide-react";
 
-const appointments = [
-  {
-    id: 1,
-    patientName: "Juan Dela Cruz",
-    time: "09:00 AM",
-    type: "Check-up",
-    status: "Confirmed",
-  },
-  {
-    id: 2,
-    patientName: "Maria Garcia",
-    time: "10:30 AM",
-    type: "Follow-up",
-    status: "Confirmed",
-  },
-  {
-    id: 3,
-    patientName: "Pedro Santos",
-    time: "02:00 PM",
-    type: "Lab Review",
-    status: "Pending",
-  },
-  {
-    id: 4,
-    patientName: "Ana Reyes",
-    time: "03:30 PM",
-    type: "Consultation",
-    status: "Confirmed",
-  },
-];
+export default function Reports() {
+  const [reports, setReports] = useState<any[]>([]); 
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
-const upcomingDays = [
-  { date: "Feb 6", day: "Thu", appointments: 4, isToday: true },
-  { date: "Feb 7", day: "Fri", appointments: 3, isToday: false },
-  { date: "Feb 8", day: "Sat", appointments: 0, isToday: false },
-  { date: "Feb 9", day: "Sun", appointments: 0, isToday: false },
-  { date: "Feb 10", day: "Mon", appointments: 5, isToday: false },
-];
+  // Filtering Logic
+  const filteredReports = reports
+    .filter((report) =>
+      report.patientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.id?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => {
+      return sortOrder === "asc" 
+        ? a.date.localeCompare(b.date) 
+        : b.date.localeCompare(a.date);
+    });
 
-export default function Appointments() {
+  const handleDownload = (reportId: string) => {
+    console.log(`Downloading report: ${reportId}`);
+  };
+
+  const handleDownloadAll = () => {
+    console.log("Downloading all filtered reports");
+  };
+
+  const toggleSort = () => {
+    setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+  };
+
   return (
     <DashboardLayout role="doctor" userName="Dr. Maria Santos">
       <div className="space-y-6 animate-fade-in">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">
-              Appointments
+              Patient Reports
             </h1>
             <p className="text-muted-foreground">
-              Manage your appointment schedule
+              View and download diagnostic results and health summaries
             </p>
           </div>
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            New Appointment
+          {/* Added Global Download Button */}
+          <Button onClick={handleDownloadAll}>
+            <Download className="mr-2 h-4 w-4" />
+            Download Reports
           </Button>
         </div>
 
-        {/* Week view */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">This Week</CardTitle>
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" className="h-8 w-8">
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm font-medium">February 2026</span>
-                <Button variant="ghost" size="icon" className="h-8 w-8">
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-5 gap-2">
-              {upcomingDays.map((day) => (
-                <button
-                  key={day.date}
-                  className={`flex flex-col items-center rounded-lg border p-3 transition-colors hover:bg-accent ${
-                    day.isToday ? "border-primary bg-primary/5" : "border-border"
-                  }`}
-                >
-                  <span className="text-xs text-muted-foreground">{day.day}</span>
-                  <span className={`text-lg font-semibold ${day.isToday ? "text-primary" : ""}`}>
-                    {day.date.split(" ")[1]}
-                  </span>
-                  {day.appointments > 0 && (
-                    <Badge variant="secondary" className="mt-1">
-                      {day.appointments}
-                    </Badge>
-                  )}
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        {/* Filters and Search */}
+        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+          <div className="relative w-full md:w-96">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by patient name or ID..."
+              className="pl-10"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center gap-2 w-full md:w-auto">
+            <Button variant="outline" size="sm" onClick={toggleSort}>
+              <ArrowUpDown className="mr-2 h-4 w-4" />
+              Sort by Date {sortOrder === "asc" ? "(Oldest)" : "(Newest)"}
+            </Button>
+            <Button variant="outline" size="sm">
+              <Filter className="mr-2 h-4 w-4" />
+              Filter
+            </Button>
+          </div>
+        </div>
 
-        {/* Today's appointments */}
+        {/* Reports List */}
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-primary" />
-                <CardTitle className="text-base">Today's Schedule</CardTitle>
+                <FileText className="h-5 w-5 text-primary" />
+                <CardTitle className="text-base">Recent Reports</CardTitle>
               </div>
-              <Badge>{appointments.length} appointments</Badge>
+              <Badge variant="secondary">{filteredReports.length} total reports</Badge>
             </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {appointments.map((apt) => (
-                <div
-                  key={apt.id}
-                  className="flex items-center justify-between rounded-lg border p-4"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Clock className="h-4 w-4" />
-                      <span className="text-sm font-medium">{apt.time}</span>
+              {filteredReports.length > 0 ? (
+                filteredReports.map((report) => (
+                  <div
+                    key={report.id}
+                    className="flex flex-col md:flex-row md:items-center justify-between rounded-lg border p-4 hover:bg-accent/5 transition-colors gap-4"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <FileText className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium">{report.patientName}</p>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <span className="font-mono">{report.id}</span>
+                          <span>•</span>
+                          <span>{report.type}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium">{apt.patientName}</p>
-                      <p className="text-sm text-muted-foreground">{apt.type}</p>
+
+                    <div className="flex items-center justify-between md:justify-end gap-4 w-full md:w-auto">
+                      <div className="text-right hidden sm:block">
+                        <p className="text-sm font-medium">Issued Date</p>
+                        <p className="text-xs text-muted-foreground">{report.date}</p>
+                      </div>
+                      <Badge
+                        variant={report.status === "Completed" ? "default" : "secondary"}
+                        className={report.status === "Completed" ? "bg-status-success" : ""}
+                      >
+                        {report.status}
+                      </Badge>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleDownload(report.id)}
+                      >
+                        <Download className="mr-2 h-4 w-4" />
+                        Download
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant={apt.status === "Confirmed" ? "default" : "secondary"}
-                      className={apt.status === "Confirmed" ? "bg-status-success" : ""}
-                    >
-                      {apt.status}
-                    </Badge>
-                    <Button variant="outline" size="sm">
-                      View
-                    </Button>
-                  </div>
+                ))
+              ) : (
+                <div className="py-10 text-center text-muted-foreground border-2 border-dashed rounded-lg">
+                  {reports.length === 0 
+                    ? "No reports available in the database." 
+                    : "No reports found matching your search."}
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>

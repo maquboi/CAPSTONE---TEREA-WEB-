@@ -11,26 +11,21 @@ import { useToast } from "@/hooks/use-toast";
 export default function DoctorProfile() {
   const { toast } = useToast();
   const [profile, setProfile] = useState({
-    firstName: "Maria", lastName: "Santos", email: "maria.santos@terea.ph",
-    phone: "+63 917 123 4567", specialty: "Pulmonology", license: "PRC-0123456",
+    firstName: "Maria",
+    lastName: "Santos",
+    email: "maria.santos@terea.ph",
+    phone: "+63 917 123 4567",
+    address: "", // Added address field
+    specialty: "Pulmonology",
+    license: "PRC-0123456",
   });
-  const [passwords, setPasswords] = useState({ current: "", new: "", confirm: "" });
 
   const handleSave = () => {
-    toast({ title: "Profile updated", description: "Your profile information has been saved." });
-  };
-
-  const handleUpdatePassword = () => {
-    if (!passwords.current || !passwords.new || !passwords.confirm) {
-      toast({ title: "Error", description: "Please fill in all password fields.", variant: "destructive" });
-      return;
-    }
-    if (passwords.new !== passwords.confirm) {
-      toast({ title: "Error", description: "New passwords do not match.", variant: "destructive" });
-      return;
-    }
-    toast({ title: "Password updated", description: "Your password has been changed successfully." });
-    setPasswords({ current: "", new: "", confirm: "" });
+    // This currently saves to the local state; ready for Supabase integration
+    toast({ 
+      title: "Profile updated", 
+      description: "Your profile information has been saved successfully." 
+    });
   };
 
   return (
@@ -41,6 +36,7 @@ export default function DoctorProfile() {
           <p className="text-muted-foreground">Manage your account information</p>
         </div>
 
+        {/* Profile Picture Card */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Profile Picture</CardTitle>
@@ -53,8 +49,12 @@ export default function DoctorProfile() {
                   <AvatarImage src="" />
                   <AvatarFallback className="bg-primary text-primary-foreground text-xl">MS</AvatarFallback>
                 </Avatar>
-                <Button size="icon" variant="secondary" className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full"
-                  onClick={() => toast({ title: "Upload", description: "Photo upload requires cloud storage." })}>
+                <Button 
+                  size="icon" 
+                  variant="secondary" 
+                  className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full"
+                  onClick={() => toast({ title: "Upload", description: "Photo upload requires cloud storage." })}
+                >
                   <Camera className="h-4 w-4" />
                 </Button>
               </div>
@@ -66,6 +66,7 @@ export default function DoctorProfile() {
           </CardContent>
         </Card>
 
+        {/* Personal Information Card */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Personal Information</CardTitle>
@@ -75,52 +76,73 @@ export default function DoctorProfile() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="firstName">First Name</Label>
-                <Input id="firstName" value={profile.firstName} onChange={(e) => setProfile({ ...profile, firstName: e.target.value })} />
+                <Input 
+                  id="firstName" 
+                  value={profile.firstName} 
+                  onChange={(e) => setProfile({ ...profile, firstName: e.target.value })} 
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="lastName">Last Name</Label>
-                <Input id="lastName" value={profile.lastName} onChange={(e) => setProfile({ ...profile, lastName: e.target.value })} />
+                <Input 
+                  id="lastName" 
+                  value={profile.lastName} 
+                  onChange={(e) => setProfile({ ...profile, lastName: e.target.value })} 
+                />
               </div>
             </div>
+            
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} />
+              <Input 
+                id="email" 
+                type="email" 
+                value={profile.email} 
+                onChange={(e) => setProfile({ ...profile, email: e.target.value })} 
+              />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="phone">Phone Number</Label>
-              <Input id="phone" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
+              <Input 
+                id="phone" 
+                value={profile.phone} 
+                onChange={(e) => setProfile({ ...profile, phone: e.target.value })} 
+              />
             </div>
+
+            {/* Added Address Field */}
+            <div className="space-y-2">
+              <Label htmlFor="address">Address</Label>
+              <Input 
+                id="address" 
+                placeholder="Enter clinic or home address"
+                value={profile.address} 
+                onChange={(e) => setProfile({ ...profile, address: e.target.value })} 
+              />
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="specialty">Specialty</Label>
-              <Input id="specialty" value={profile.specialty} onChange={(e) => setProfile({ ...profile, specialty: e.target.value })} />
+              <Input 
+                id="specialty" 
+                value={profile.specialty} 
+                onChange={(e) => setProfile({ ...profile, specialty: e.target.value })} 
+              />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="license">License Number</Label>
-              <Input id="license" value={profile.license} onChange={(e) => setProfile({ ...profile, license: e.target.value })} />
+              <Input 
+                id="license" 
+                value={profile.license} 
+                onChange={(e) => setProfile({ ...profile, license: e.target.value })} 
+              />
             </div>
-            <Button onClick={handleSave}>Save Changes</Button>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Change Password</CardTitle>
-            <CardDescription>Update your password</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="currentPassword">Current Password</Label>
-              <Input id="currentPassword" type="password" value={passwords.current} onChange={(e) => setPasswords({ ...passwords, current: e.target.value })} />
+            <div className="pt-2">
+              <Button onClick={handleSave} className="w-full sm:w-auto">Save Changes</Button>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="newPassword">New Password</Label>
-              <Input id="newPassword" type="password" value={passwords.new} onChange={(e) => setPasswords({ ...passwords, new: e.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm New Password</Label>
-              <Input id="confirmPassword" type="password" value={passwords.confirm} onChange={(e) => setPasswords({ ...passwords, confirm: e.target.value })} />
-            </div>
-            <Button onClick={handleUpdatePassword}>Update Password</Button>
           </CardContent>
         </Card>
       </div>

@@ -23,7 +23,6 @@ import AdminSettings from "./pages/admin/Settings";
 
 // Doctor Pages
 import DoctorDashboard from "./pages/doctor/Dashboard";
-import PatientQueue from "./pages/doctor/PatientQueue";
 import AllPatients from "./pages/doctor/AllPatients";
 import FollowUpTracker from "./pages/doctor/FollowUpTracker";
 import Appointments from "./pages/doctor/Appointments";
@@ -59,7 +58,6 @@ const App = () => (
           
           {/* Doctor routes */}
           <Route path="/doctor/dashboard" element={<DoctorDashboard />} />
-          <Route path="/doctor/queue" element={<PatientQueue />} />
           <Route path="/doctor/patients" element={<AllPatients />} />
           <Route path="/doctor/follow-ups" element={<FollowUpTracker />} />
           <Route path="/doctor/appointments" element={<Appointments />} />
@@ -68,7 +66,7 @@ const App = () => (
           <Route path="/doctor/settings" element={<DoctorSettings />} />
           
           {/* ADDED: Dynamic Route for viewing a specific patient */}
-          <Route path="/doctor/patient/:id" element={<PatientDetail />} />
+          <Route path="/doctor/patient-details/:id" element={<PatientDetail />} />
           
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

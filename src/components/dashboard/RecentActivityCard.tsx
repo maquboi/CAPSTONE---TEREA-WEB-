@@ -1,77 +1,67 @@
-import { cn } from "@/lib/utils";
-import { useNavigate, useLocation } from "react-router-dom";
-import { 
-  UserPlus, Calendar, ClipboardCheck, AlertCircle, FileText, Bell
-} from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Clock, Activity } from "lucide-react";
 
-interface Activity {
-  id: string;
-  type: "patient-added" | "appointment" | "status-update" | "alert" | "report" | "reminder";
-  title: string;
-  description: string;
-  time: string;
-  user: string;
+// 1. Define the shape of a single activity log
+interface ActivityLog {
+  id: string | number;
+  action: string;
+  patient: string;
+  details: string;
+  timestamp: string;
 }
 
-const mockActivities: Activity[] = [
-  { id: "1", type: "alert", title: "High-risk patient flagged", description: "Juan Dela Cruz has been flagged as high-risk by AI", time: "5 min ago", user: "System" },
-  { id: "2", type: "appointment", title: "Appointment scheduled", description: "Maria Santos scheduled for checkup on Feb 10", time: "15 min ago", user: "Dr. Santos" },
-  { id: "3", type: "status-update", title: "Status updated", description: "Pedro Reyes moved to 'For Follow-up'", time: "1 hour ago", user: "Dr. Cruz" },
-  { id: "4", type: "patient-added", title: "New patient registered", description: "Ana Garcia completed symptom assessment", time: "2 hours ago", user: "System" },
-  { id: "5", type: "report", title: "Monthly report generated", description: "January 2025 TB trend report is ready", time: "3 hours ago", user: "Admin" },
-];
+// 2. Define the props the component can receive
+interface RecentActivityCardProps {
+  activities: ActivityLog[];
+}
 
-const getActivityIcon = (type: Activity["type"]) => {
-  const icons = { "patient-added": UserPlus, appointment: Calendar, "status-update": ClipboardCheck, alert: AlertCircle, report: FileText, reminder: Bell };
-  return icons[type];
-};
-
-const getActivityColor = (type: Activity["type"]) => {
-  const colors = {
-    "patient-added": "bg-blue-100 text-blue-600",
-    appointment: "bg-purple-100 text-purple-600",
-    "status-update": "bg-emerald-100 text-emerald-600",
-    alert: "bg-red-100 text-red-600",
-    report: "bg-amber-100 text-amber-600",
-    reminder: "bg-cyan-100 text-cyan-600",
-  };
-  return colors[type];
-};
-
-export function RecentActivityCard() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const isAdmin = location.pathname.startsWith("/admin");
-
+export function RecentActivityCard({ activities }: RecentActivityCardProps) {
   return (
-    <div className="rounded-xl border border-border bg-card p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-lg font-semibold">Recent Activity</h3>
-        <button
-          className="text-sm font-medium text-primary hover:underline"
-          onClick={() => navigate(isAdmin ? "/admin/audit-logs" : "/doctor/activity")}
-        >
-          View all
-        </button>
-      </div>
-
-      <div className="space-y-4">
-        {mockActivities.map((activity) => {
-          const Icon = getActivityIcon(activity.type);
-          return (
-            <div key={activity.id} className="flex items-start gap-3 rounded-lg p-2 transition-colors hover:bg-muted/30">
-              <div className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", getActivityColor(activity.type))}>
-                <Icon className="h-4 w-4" />
+    <Card className="h-full border-[#DDE5B6] shadow-sm bg-white">
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          <Activity className="h-4 w-4 text-[#606C38]" />
+          <CardTitle className="text-base font-bold text-[#2D3B1E]">
+            Recent Activity
+          </CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-5">
+          {activities && activities.length > 0 ? (
+            activities.map((log) => (
+              <div key={log.id} className="relative flex gap-3">
+                <div className="flex flex-col items-center">
+                  <div className="h-2 w-2 rounded-full bg-[#606C38] mt-1.5" />
+                  <div className="w-[1px] h-full bg-[#DDE5B6] mt-1" />
+                </div>
+                <div className="flex-1 pb-2">
+                  <p className="text-sm font-bold text-[#2D3B1E] leading-tight">
+                    {log.action}
+                  </p>
+                  <p className="text-[11px] text-[#606C38] font-semibold mt-0.5">
+                    {log.patient}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-1 line-clamp-1">
+                    {log.details}
+                  </p>
+                  <div className="flex items-center gap-1 text-[9px] text-muted-foreground pt-1.5 font-medium">
+                    <Clock className="h-2.5 w-2.5" />
+                    {new Date(log.timestamp).toLocaleTimeString([], { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })}
+                  </div>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm">{activity.title}</p>
-                <p className="text-sm text-muted-foreground truncate">{activity.description}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{activity.time} • {activity.user}</p>
-              </div>
+            ))
+          ) : (
+            <div className="text-center py-10 text-muted-foreground italic text-xs">
+              No recent activity found.
             </div>
-          );
-        })}
-      </div>
-    </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
