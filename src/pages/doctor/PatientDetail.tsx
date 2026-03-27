@@ -27,7 +27,9 @@ import {
   Check,
   TrendingUp,
   AlertCircle,
-  Plus
+  Plus,
+  Wand2,
+  Trash2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -39,6 +41,7 @@ export default function PatientDetail() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [prescribing, setPrescribing] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [patient, setPatient] = useState<any>(null);
   
   const [meds, setMeds] = useState<any[]>([]);
@@ -48,7 +51,7 @@ export default function PatientDetail() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
-  const [newMed, setNewMed] = useState({ name: "", dosage: "", time: "08:00 AM", start: "", end: "" });
+  const [newMed, setNewMed] = useState({ name: "", dosage: "", time: "08:00", start: "", end: "" });
 
   useEffect(() => {
     fetchData();
@@ -94,7 +97,6 @@ export default function PatientDetail() {
     }
   };
 
-  // --- REFINED SYNC LOGIC ---
   const handleSaveTreatment = async () => {
     if (!startDate || !endDate) {
       toast({ 
@@ -107,8 +109,6 @@ export default function PatientDetail() {
 
     setSaving(true);
     try {
-      // 1. Update Profile (Treatment Dates)
-      // The .select() ensures we get confirmation the data was written
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .update({ 
@@ -124,7 +124,6 @@ export default function PatientDetail() {
         throw new Error("Profile update failed. Verify RLS policies and Patient ID.");
       }
 
-      // 2. Update Connection Status to active
       const { error: connError } = await supabase
         .from('connections')
         .update({ status: 'active' })
@@ -150,19 +149,95 @@ export default function PatientDetail() {
     }
   };
 
+  const handleGenerateProtocol = async () => {
+    if (!startDate) {
+      toast({ 
+        variant: "destructive", 
+        title: "Start Date Required", 
+        description: "Please set and save the Treatment Start Date first to calculate milestones." 
+      });
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const start = new Date(startDate);
+
+      const addDays = (date: Date, days: number) => {
+        const result = new Date(date);
+        result.setDate(result.getDate() + days);
+        return result.toISOString().split('T')[0];
+      };
+
+      const protocolMilestones = [
+        {
+          patient_id: id,
+          doctor_id: user?.id,
+          title: "End of Intensive Phase Sputum Test",
+          location: "TB DOTS Clinic",
+          appointment_date: addDays(start, 60), 
+          status: "pending",
+          type: "protocol"
+        },
+        {
+          patient_id: id,
+          doctor_id: user?.id,
+          title: "Month 5 Sputum Follow-up",
+          location: "TB DOTS Clinic",
+          appointment_date: addDays(start, 150), 
+          status: "pending",
+          type: "protocol"
+        },
+        {
+          patient_id: id,
+          doctor_id: user?.id,
+          title: "Final Sputum & Cure Assessment",
+          location: "TB DOTS Clinic",
+          appointment_date: addDays(start, 180), 
+          status: "pending",
+          type: "protocol"
+        }
+      ];
+
+      const { error } = await supabase.from('roadmap').insert(protocolMilestones);
+      if (error) throw error;
+
+      toast({ 
+        title: "Protocol Generated", 
+        description: "DOH 6-Month Milestones successfully added to roadmap." 
+      });
+      fetchData();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Generation Failed", description: err.message });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const handleAddPrescription = async () => {
-    if (!newMed.name || !newMed.dosage || !newMed.start || !newMed.end) {
+    if (!newMed.name || !newMed.dosage || !newMed.time || !newMed.start || !newMed.end) {
       toast({ variant: "destructive", title: "Missing Fields", description: "Please fill out all medication details." });
       return;
     }
     
+    // Format 24h time to 12h AM/PM for the mobile app UI
+    let formattedTime = newMed.time;
+    if (newMed.time.includes(":")) {
+      const [h, m] = newMed.time.split(":");
+      const hour = parseInt(h);
+      const ampm = hour >= 12 ? "PM" : "AM";
+      const formattedHour = hour % 12 || 12;
+      formattedTime = `${formattedHour.toString().padStart(2, '0')}:${m} ${ampm}`;
+    }
+
     setPrescribing(true);
     try {
       const { error } = await supabase.from('medications').insert({
         user_id: id,
         name: newMed.name,
         dosage: newMed.dosage,
-        time: newMed.time,
+        time: formattedTime,
         start_date: newMed.start,
         end_date: newMed.end,
         is_taken: false
@@ -171,12 +246,23 @@ export default function PatientDetail() {
       if (error) throw error;
       
       toast({ title: "Prescription Added", description: "Medication pushed to patient's diary." });
-      setNewMed({ name: "", dosage: "", time: "08:00 AM", start: "", end: "" });
+      setNewMed({ name: "", dosage: "", time: "08:00", start: "", end: "" });
       fetchData();
     } catch (err: any) {
       toast({ variant: "destructive", title: "Error", description: err.message });
     } finally {
       setPrescribing(false);
+    }
+  };
+
+  const handleDeletePrescription = async (medId: number) => {
+    try {
+      const { error } = await supabase.from('medications').delete().eq('id', medId);
+      if (error) throw error;
+      toast({ title: "Prescription Removed", description: "Updated on patient's diary." });
+      fetchData();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Error", description: err.message });
     }
   };
 
@@ -287,10 +373,17 @@ export default function PatientDetail() {
                   </div>
                 </div>
                 
-                <Button onClick={handleSaveTreatment} className="w-full bg-[#606C38] hover:bg-[#2D3B1E] text-white" disabled={saving}>
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                  Save & Sync to Roadmap
-                </Button>
+                <div className="flex gap-2">
+                  <Button onClick={handleSaveTreatment} className="w-full bg-[#606C38] hover:bg-[#2D3B1E] text-white" disabled={saving}>
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                    Save & Sync Dates
+                  </Button>
+                  
+                  <Button onClick={handleGenerateProtocol} variant="outline" className="w-full border-[#606C38] text-[#606C38] hover:bg-[#FEFAE0]" disabled={generating || !startDate}>
+                    {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4 mr-2" />}
+                    Auto-Generate TB Protocol
+                  </Button>
+                </div>
 
                 {startDate && endDate && (
                   <div className="mt-4 p-5 rounded-2xl bg-white border border-[#DDE5B6] shadow-sm">
@@ -339,8 +432,19 @@ export default function PatientDetail() {
                       ) : appointments.filter(a => a.status !== 'completed').map((appt) => (
                         <TableRow key={appt.id} className="hover:bg-[#FEFAE0]/30">
                           <TableCell className="py-3 px-2">
-                            <p className="text-sm font-bold text-[#2D3B1E]">{new Date(appt.appointment_date).toLocaleDateString()}</p>
-                            <p className="text-[10px] text-muted-foreground">{appt.location}</p>
+                            <p className="text-sm font-bold text-[#2D3B1E]">
+                              {appt.title || 'Follow-up'}
+                            </p>
+                            <div className="flex items-center mt-1">
+                              <p className="text-[10px] text-muted-foreground">
+                                {new Date(appt.appointment_date).toLocaleDateString()} • {appt.location}
+                              </p>
+                              {appt.type === 'protocol' && (
+                                <Badge variant="outline" className="ml-2 text-[8px] h-4 px-1 border-[#606C38] text-[#606C38]">
+                                  DOH Protocol
+                                </Badge>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="text-right py-3 px-2">
                             <Button size="sm" variant="ghost" className="h-8 text-[#606C38]" onClick={() => handleCompleteAppointment(appt.id)}>
@@ -357,29 +461,39 @@ export default function PatientDetail() {
               <Card className="shadow-sm border-[#DDE5B6]">
                 <CardHeader><CardTitle className="text-sm font-bold flex items-center gap-2 text-[#2D3B1E]"><Pill className="h-4 w-4 text-[#606C38]" /> Active Prescriptions</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
+                  
+                  {/* Doctor's Prescribe Form */}
                   <div className="p-3 bg-[#FEFAE0]/40 rounded-xl border border-[#DDE5B6] space-y-3">
                     <p className="text-xs font-bold text-[#606C38] uppercase">New Prescription</p>
                     <div className="grid grid-cols-2 gap-2">
-                      <Input placeholder="Meds Name" className="h-8 text-xs bg-white" value={newMed.name} onChange={(e) => setNewMed({...newMed, name: e.target.value})} />
-                      <Input placeholder="Dosage" className="h-8 text-xs bg-white" value={newMed.dosage} onChange={(e) => setNewMed({...newMed, dosage: e.target.value})} />
-                      <Input type="date" className="h-8 text-xs bg-white" value={newMed.start} onChange={(e) => setNewMed({...newMed, start: e.target.value})} />
-                      <Input type="date" className="h-8 text-xs bg-white" value={newMed.end} onChange={(e) => setNewMed({...newMed, end: e.target.value})} />
+                      <Input placeholder="Meds Name" className="h-8 text-xs bg-white col-span-2" value={newMed.name} onChange={(e) => setNewMed({...newMed, name: e.target.value})} />
+                      <Input placeholder="Dosage (500mg)" className="h-8 text-xs bg-white" value={newMed.dosage} onChange={(e) => setNewMed({...newMed, dosage: e.target.value})} />
+                      <Input type="time" className="h-8 text-xs bg-white" value={newMed.time} onChange={(e) => setNewMed({...newMed, time: e.target.value})} />
+                      <div className="col-span-2 grid grid-cols-2 gap-2">
+                        <Input type="date" className="h-8 text-xs bg-white" value={newMed.start} onChange={(e) => setNewMed({...newMed, start: e.target.value})} />
+                        <Input type="date" className="h-8 text-xs bg-white" value={newMed.end} onChange={(e) => setNewMed({...newMed, end: e.target.value})} />
+                      </div>
                     </div>
                     <Button onClick={handleAddPrescription} size="sm" className="w-full h-8 bg-[#606C38]" disabled={prescribing}>
-                      {prescribing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3 mr-1" />} Prescribe
+                      {prescribing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3 mr-1" />} Push to Patient App
                     </Button>
                   </div>
 
                   <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                     {meds.length === 0 ? (
-                       <p className="text-center text-xs text-muted-foreground py-4 italic">No prescriptions.</p>
+                       <p className="text-center text-xs text-muted-foreground py-4 italic">No active prescriptions.</p>
                     ) : meds.map((med) => (
                       <div key={med.id} className="flex justify-between items-center p-2 rounded-lg bg-white border border-slate-100">
                         <div>
                           <p className="text-xs font-bold text-[#2D3B1E]">{med.name} <span className="font-normal text-muted-foreground">({med.dosage})</span></p>
-                          <p className="text-[10px] text-muted-foreground">{new Date(med.start_date).toLocaleDateString()} - {new Date(med.end_date).toLocaleDateString()}</p>
+                          <p className="text-[10px] text-muted-foreground">{new Date(med.start_date).toLocaleDateString()} - {new Date(med.end_date).toLocaleDateString()} • {med.time}</p>
                         </div>
-                        {med.is_taken ? <Check className="h-4 w-4 text-[#606C38]" /> : <Circle className="h-4 w-4 text-slate-300" />}
+                        <div className="flex items-center gap-1">
+                          {med.is_taken ? <Check className="h-4 w-4 text-[#606C38] mr-1" /> : <Circle className="h-4 w-4 text-slate-300 mr-1" />}
+                          <Button size="icon" variant="ghost" className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50" onClick={() => handleDeletePrescription(med.id)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
