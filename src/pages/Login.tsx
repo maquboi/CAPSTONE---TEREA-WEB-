@@ -91,7 +91,7 @@ export default function Login() {
           backgroundColor: "#DDE5B6" // Fallback color while image loads
         }}
       >
-        {/* Modern Gradient Overlay: Keeps the top light/transparent and bottoms dark for text readability */}
+        {/* Modern Gradient Overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-[#2D3B1E]/95 via-[#2D3B1E]/50 to-transparent"></div>
 
         <div className="relative z-10 flex flex-col justify-between w-full p-12">
@@ -106,7 +106,7 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Bottom Content */}
+          {/* Bottom Content (Stats removed) */}
           <div className="space-y-8">
             <div className="space-y-3">
               <h2 className="text-4xl font-bold leading-tight text-white">
@@ -118,31 +118,15 @@ export default function Login() {
                 for healthcare workers in the Municipality of Carmona.
               </p>
             </div>
-
-            {/* Stats Row */}
-            <div className="flex gap-8 text-sm pt-4 border-t border-white/20">
-              <div className="space-y-1">
-                <p className="text-2xl font-bold text-[#DDE5B6]">1,234</p>
-                <p className="text-white/70 font-medium uppercase tracking-wider text-[10px]">Patients</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-2xl font-bold text-[#DDE5B6]">16</p>
-                <p className="text-white/70 font-medium uppercase tracking-wider text-[10px]">Barangays</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-2xl font-bold text-[#DDE5B6]">98%</p>
-                <p className="text-white/70 font-medium uppercase tracking-wider text-[10px]">Follow-up</p>
-              </div>
-            </div>
             
-            <p className="text-xs text-white/50">
+            <p className="text-xs text-white/50 pt-4 border-t border-white/10">
               © 2026 TEREA. Municipality of Carmona Health Office.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Right side - Login Form (Lightened & Cleaned Up) */}
+      {/* Right side - Login Form */}
       <div className="flex flex-1 items-center justify-center p-6 sm:p-12 bg-white lg:rounded-l-[2.5rem] lg:shadow-[-20px_0_40px_-15px_rgba(0,0,0,0.05)] z-10">
         <div className="w-full max-w-[420px] space-y-8 animate-fade-in">
           
@@ -243,7 +227,7 @@ export default function Login() {
                   Authenticating...
                 </>
               ) : (
-                "Sign in securely"
+                "Sign In"
               )}
             </Button>
           </form>
