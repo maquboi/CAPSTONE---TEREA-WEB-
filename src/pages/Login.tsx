@@ -80,121 +80,131 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#F8F9FA]">
-      {/* Left side - Branding (Hidden on mobile, stylized with theme colors) */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-[#2D3B1E] to-[#606C38] flex-col justify-between p-12 text-white shadow-2xl relative overflow-hidden">
-        {/* Decorative background element */}
-        <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-white opacity-5 rounded-full blur-3xl mix-blend-overlay"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-[#FEFAE0] opacity-5 rounded-full blur-3xl mix-blend-overlay"></div>
+    <div className="flex min-h-screen bg-[#F4F7F4] overflow-hidden">
+      
+      {/* Left side - Image Placeholder & Branding */}
+      <div 
+        className="hidden lg:flex lg:w-1/2 relative bg-cover bg-center"
+        style={{ 
+          // 👉 PASTE YOUR BACKGROUND IMAGE URL HERE:
+          backgroundImage: "url('https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?q=80&w=2070&auto=format&fit=crop')",
+          backgroundColor: "#DDE5B6" // Fallback color while image loads
+        }}
+      >
+        {/* Modern Gradient Overlay: Keeps the top light/transparent and bottoms dark for text readability */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#2D3B1E]/95 via-[#2D3B1E]/50 to-transparent"></div>
 
-        <div className="relative z-10">
+        <div className="relative z-10 flex flex-col justify-between w-full p-12">
+          {/* Top Logo */}
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FEFAE0]/20 backdrop-blur-sm shadow-inner border border-white/10">
-              <span className="text-3xl font-extrabold text-white">T</span>
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20 backdrop-blur-md shadow-sm border border-white/30">
+              <span className="text-2xl font-extrabold text-white">T</span>
             </div>
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-white">TEREA</h1>
-              <p className="text-sm text-[#FEFAE0]/80 font-medium tracking-wide">TB Risk Assessment Platform</p>
+              <h1 className="text-2xl font-bold tracking-tight text-white drop-shadow-md">TEREA</h1>
+              <p className="text-xs text-white/90 font-medium tracking-wide drop-shadow-md">TB Risk Assessment Platform</p>
             </div>
           </div>
-        </div>
 
-        <div className="space-y-8 relative z-10">
-          <div className="space-y-4">
-            <h2 className="text-4xl font-bold leading-tight">
-              Empowering Carmona's<br />
-              <span className="text-[#FEFAE0]">Fight Against TB</span>
-            </h2>
-            <p className="text-white/80 max-w-md leading-relaxed text-lg">
-              AI-assisted risk assessment and patient monitoring platform designed 
-              for healthcare workers in the Municipality of Carmona.
+          {/* Bottom Content */}
+          <div className="space-y-8">
+            <div className="space-y-3">
+              <h2 className="text-4xl font-bold leading-tight text-white">
+                Empowering Carmona's<br />
+                <span className="text-[#DDE5B6]">Fight Against TB</span>
+              </h2>
+              <p className="text-white/80 max-w-md leading-relaxed text-base">
+                AI-assisted risk assessment and patient monitoring platform designed 
+                for healthcare workers in the Municipality of Carmona.
+              </p>
+            </div>
+
+            {/* Stats Row */}
+            <div className="flex gap-8 text-sm pt-4 border-t border-white/20">
+              <div className="space-y-1">
+                <p className="text-2xl font-bold text-[#DDE5B6]">1,234</p>
+                <p className="text-white/70 font-medium uppercase tracking-wider text-[10px]">Patients</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-2xl font-bold text-[#DDE5B6]">16</p>
+                <p className="text-white/70 font-medium uppercase tracking-wider text-[10px]">Barangays</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-2xl font-bold text-[#DDE5B6]">98%</p>
+                <p className="text-white/70 font-medium uppercase tracking-wider text-[10px]">Follow-up</p>
+              </div>
+            </div>
+            
+            <p className="text-xs text-white/50">
+              © 2026 TEREA. Municipality of Carmona Health Office.
             </p>
           </div>
-
-          <div className="flex gap-10 text-sm">
-            <div className="space-y-1">
-              <p className="text-3xl font-bold text-[#FEFAE0]">1,234</p>
-              <p className="text-white/70 font-medium uppercase tracking-wider text-xs">Patients Monitored</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-3xl font-bold text-[#FEFAE0]">16</p>
-              <p className="text-white/70 font-medium uppercase tracking-wider text-xs">Barangays Covered</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-3xl font-bold text-[#FEFAE0]">98%</p>
-              <p className="text-white/70 font-medium uppercase tracking-wider text-xs">Follow-up Rate</p>
-            </div>
-          </div>
         </div>
-
-        <p className="text-xs text-white/50 relative z-10">
-          © 2026 TEREA. Municipality of Carmona Health Office.
-        </p>
       </div>
 
-      {/* Right side - Login Form */}
-      <div className="flex flex-1 items-center justify-center p-4 sm:p-8">
-        <div className="w-full max-w-md bg-white p-8 sm:p-10 rounded-3xl shadow-xl border border-[#DDE5B6]/50 space-y-8 animate-fade-in">
+      {/* Right side - Login Form (Lightened & Cleaned Up) */}
+      <div className="flex flex-1 items-center justify-center p-6 sm:p-12 bg-white lg:rounded-l-[2.5rem] lg:shadow-[-20px_0_40px_-15px_rgba(0,0,0,0.05)] z-10">
+        <div className="w-full max-w-[420px] space-y-8 animate-fade-in">
           
           {/* Mobile logo */}
-          <div className="lg:hidden flex items-center justify-center gap-3 mb-2">
+          <div className="lg:hidden flex items-center justify-center gap-3 mb-6">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#606C38] shadow-md">
               <span className="text-2xl font-bold text-white">T</span>
             </div>
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-[#2D3B1E]">TEREA</h1>
-              <p className="text-xs text-muted-foreground font-medium">TB Risk Assessment</p>
+              <p className="text-xs text-slate-500 font-medium">TB Risk Assessment</p>
             </div>
           </div>
 
           <div className="space-y-2 text-center lg:text-left">
-            <h2 className="text-3xl font-bold tracking-tight text-[#2D3B1E]">Welcome back</h2>
-            <p className="text-sm text-muted-foreground">
-              Sign in to access your dashboard
+            <h2 className="text-3xl font-extrabold tracking-tight text-[#2D3B1E]">Welcome back</h2>
+            <p className="text-sm text-slate-500 font-medium">
+              Sign in to your staff portal
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-5 pt-2">
             {error && (
               <div className="rounded-xl bg-red-50 p-4 text-sm text-red-600 border border-red-100 flex items-center">
-                <div className="bg-red-100 p-1 rounded-full mr-3">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                <div className="bg-red-100 p-1.5 rounded-full mr-3 shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
                 </div>
                 {error}
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label htmlFor="role" className="text-[#2D3B1E] font-semibold text-xs uppercase tracking-wider">Sign in as</Label>
+            <div className="space-y-2.5">
+              <Label htmlFor="role" className="text-[#2D3B1E] font-bold text-xs uppercase tracking-wide">Sign in as</Label>
               <Select value={role} onValueChange={setRole}>
-                <SelectTrigger id="role" className="bg-[#F8F9FA] border-[#DDE5B6] h-12 rounded-xl focus:ring-[#606C38]">
+                <SelectTrigger id="role" className="bg-slate-50 border-slate-200 h-12 rounded-xl text-slate-700 focus:ring-[#606C38] focus:border-[#606C38] transition-all">
                   <SelectValue placeholder="Select your role" />
                 </SelectTrigger>
-                <SelectContent className="rounded-xl border-[#DDE5B6]">
-                  <SelectItem value="admin">Administrator</SelectItem>
-                  <SelectItem value="doctor">Doctor / Employee</SelectItem>
+                <SelectContent className="rounded-xl border-slate-200 shadow-lg">
+                  <SelectItem value="admin" className="cursor-pointer">Administrator</SelectItem>
+                  <SelectItem value="doctor" className="cursor-pointer">Doctor / Employee</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-[#2D3B1E] font-semibold text-xs uppercase tracking-wider">Email address</Label>
+            <div className="space-y-2.5">
+              <Label htmlFor="email" className="text-[#2D3B1E] font-bold text-xs uppercase tracking-wide">Email address</Label>
               <Input
                 id="email"
                 type="email"
                 placeholder="name@carmona.gov.ph"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="bg-[#F8F9FA] border-[#DDE5B6] h-12 rounded-xl focus-visible:ring-[#606C38]"
+                className="bg-slate-50 border-slate-200 h-12 rounded-xl text-slate-700 placeholder:text-slate-400 focus-visible:ring-[#606C38] focus-visible:border-[#606C38] transition-all"
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               <div className="flex items-center justify-between">
-                <Label htmlFor="password" className="text-[#2D3B1E] font-semibold text-xs uppercase tracking-wider">Password</Label>
+                <Label htmlFor="password" className="text-[#2D3B1E] font-bold text-xs uppercase tracking-wide">Password</Label>
                 <button
                   type="button"
-                  className="text-xs font-semibold text-[#606C38] hover:text-[#2D3B1E] hover:underline transition-colors"
+                  className="text-xs font-semibold text-[#606C38] hover:text-[#2D3B1E] transition-colors"
                 >
                   Forgot password?
                 </button>
@@ -206,12 +216,12 @@ export default function Login() {
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="bg-[#F8F9FA] border-[#DDE5B6] h-12 rounded-xl pr-10 focus-visible:ring-[#606C38]"
+                  className="bg-slate-50 border-slate-200 h-12 rounded-xl text-slate-700 pr-10 placeholder:text-slate-400 focus-visible:ring-[#606C38] focus-visible:border-[#606C38] transition-all"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#606C38] transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#606C38] transition-colors"
                 >
                   {showPassword ? (
                     <EyeOff className="h-5 w-5" />
@@ -224,7 +234,7 @@ export default function Login() {
 
             <Button
               type="submit"
-              className="w-full h-12 mt-2 bg-[#606C38] hover:bg-[#2D3B1E] text-white rounded-xl shadow-md transition-all font-bold text-md"
+              className="w-full h-12 mt-6 bg-[#606C38] hover:bg-[#4A5529] text-white rounded-xl shadow-sm transition-all font-bold text-sm"
               disabled={isLoading}
             >
               {isLoading ? (
@@ -238,10 +248,10 @@ export default function Login() {
             </Button>
           </form>
 
-          <div className="pt-2 text-center border-t border-slate-100">
-            <p className="text-sm text-muted-foreground mt-4">
+          <div className="pt-6 text-center">
+            <p className="text-sm text-slate-500">
               Need access?{" "}
-              <button className="font-semibold text-[#606C38] hover:text-[#2D3B1E] hover:underline transition-colors">
+              <button className="font-semibold text-[#606C38] hover:text-[#2D3B1E] transition-colors">
                 Contact IT Support
               </button>
             </p>
