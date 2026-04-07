@@ -19,52 +19,52 @@ export function HeatmapCard() {
   const getRiskColor = (level: "high" | "medium" | "low") => {
     switch (level) {
       case "high":
-        return "bg-red-500/80";
+        return "bg-[#606C38]/90";
       case "medium":
-        return "bg-amber-500/80";
+        return "bg-[#DDE5B6]/90";
       case "low":
-        return "bg-emerald-500/80";
+        return "bg-[#8d9a5b]/90";
     }
   };
 
   const getRiskBg = (level: "high" | "medium" | "low") => {
     switch (level) {
       case "high":
-        return "bg-red-50 border-red-200";
+        return "bg-[#F4F7F4] border-[#DDE5B6]";
       case "medium":
-        return "bg-amber-50 border-amber-200";
+        return "bg-[#FBFCF8] border-[#DDE5B6]";
       case "low":
-        return "bg-emerald-50 border-emerald-200";
+        return "bg-[#F4F7F4] border-[#DDE5B6]";
     }
   };
 
   return (
-    <div className="rounded-xl border border-border bg-card p-6">
+    <div className="dashboard-surface rounded-2xl border border-[#DDE5B6] p-6">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold">Carmona Risk Heatmap</h3>
-          <p className="text-sm text-muted-foreground">
+          <h3 className="text-lg font-semibold text-[#2D3B1E]">Carmona Risk Heatmap</h3>
+          <p className="text-sm text-[#2D3B1E]/65">
             High-risk TB assessment areas by barangay
           </p>
         </div>
         <div className="flex items-center gap-4 text-sm">
           <div className="flex items-center gap-1.5">
-            <div className="h-3 w-3 rounded-full bg-red-500" />
-            <span className="text-muted-foreground">High</span>
+            <div className="h-3 w-3 rounded-full bg-[#606C38]" />
+            <span className="text-[#2D3B1E]/65">High</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="h-3 w-3 rounded-full bg-amber-500" />
-            <span className="text-muted-foreground">Medium</span>
+            <div className="h-3 w-3 rounded-full bg-[#DDE5B6]" />
+            <span className="text-[#2D3B1E]/65">Medium</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="h-3 w-3 rounded-full bg-emerald-500" />
-            <span className="text-muted-foreground">Low</span>
+            <div className="h-3 w-3 rounded-full bg-[#8d9a5b]" />
+            <span className="text-[#2D3B1E]/65">Low</span>
           </div>
         </div>
       </div>
 
       {/* Simplified map visualization */}
-      <div className="relative mb-6 h-48 rounded-lg bg-muted/50 overflow-hidden">
+      <div className="relative mb-6 h-48 overflow-hidden rounded-xl border border-[#DDE5B6] bg-[linear-gradient(180deg,rgba(244,247,244,0.95),rgba(221,229,182,0.24))]">
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="grid grid-cols-3 gap-2 p-4">
             {mockBarangayData.slice(0, 6).map((brgy, i) => (
@@ -82,7 +82,7 @@ export function HeatmapCard() {
             ))}
           </div>
         </div>
-        <div className="absolute bottom-2 right-2 rounded bg-background/80 px-2 py-1 text-xs text-muted-foreground">
+        <div className="absolute bottom-2 right-2 rounded bg-[#F4F7F4]/90 px-2 py-1 text-xs text-[#2D3B1E]/65">
           Carmona, Cavite
         </div>
       </div>
@@ -93,7 +93,7 @@ export function HeatmapCard() {
           <div
             key={brgy.name}
             className={cn(
-              "flex items-center justify-between rounded-lg border px-4 py-3 transition-colors hover:bg-muted/50",
+              "flex items-center justify-between rounded-lg border px-4 py-3 transition-colors hover:bg-[#DDE5B6]/25",
               getRiskBg(brgy.riskLevel)
             )}
           >

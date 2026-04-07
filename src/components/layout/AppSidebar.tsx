@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -8,7 +7,6 @@ import {
   Activity,
   Settings,
   HelpCircle,
-  LogOut,
   ChevronLeft,
   ChevronRight,
   MapPin,
@@ -88,10 +86,11 @@ const doctorNavSections: NavSection[] = [
 
 interface AppSidebarProps {
   role: "admin" | "doctor";
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
 }
 
-export function AppSidebar({ role }: AppSidebarProps) {
-  const [collapsed, setCollapsed] = useState(false);
+export function AppSidebar({ role, collapsed, onToggleCollapsed }: AppSidebarProps) {
   const location = useLocation();
 
   const navSections = role === "admin" ? adminNavSections : doctorNavSections;
@@ -104,18 +103,17 @@ export function AppSidebar({ role }: AppSidebarProps) {
       <NavLink
         to={item.href}
         className={cn(
-          "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-200",
-          "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-          isActive && "bg-sidebar-accent text-sidebar-primary font-medium",
+          "sidebar-nav-link flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-300",
+          isActive && "sidebar-nav-link-active font-semibold",
           collapsed && "justify-center px-2"
         )}
       >
-        <Icon className={cn("h-5 w-5 shrink-0", isActive && "text-sidebar-primary")} />
+        <Icon className={cn("h-5 w-5 shrink-0 transition-transform duration-300", isActive && "scale-105 text-[#606C38]")} />
         {!collapsed && (
           <>
             <span className="flex-1">{item.title}</span>
             {item.badge && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-sidebar-primary px-1.5 text-xs font-medium text-sidebar-primary-foreground">
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#606C38] px-1.5 text-xs font-medium text-white">
                 {item.badge}
               </span>
             )}
@@ -146,34 +144,34 @@ export function AppSidebar({ role }: AppSidebarProps) {
   return (
     <aside
       className={cn(
-        "flex flex-col bg-sidebar text-sidebar-foreground transition-all duration-300",
+        "sidebar-rail fixed inset-y-0 left-0 z-40 shrink-0 flex h-screen flex-col overflow-hidden border-r border-[#DDE5B6] bg-[#F4F7F4]/96 text-[#2D3B1E] transition-all duration-300 ease-in-out backdrop-blur-xl",
         collapsed ? "w-16" : "w-64"
       )}
     >
       {/* Logo */}
       <div className={cn(
-        "flex h-16 items-center border-b border-sidebar-border px-4",
+        "flex h-16 items-center border-b border-[#DDE5B6] px-4",
         collapsed && "justify-center px-2"
       )}>
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-primary">
-            <span className="text-lg font-bold text-sidebar-primary-foreground">T</span>
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#606C38] shadow-sm">
+            <span className="text-lg font-bold text-white">T</span>
           </div>
           {!collapsed && (
             <div>
               <h1 className="text-lg font-semibold tracking-tight">TEREA</h1>
-              <p className="text-xs text-sidebar-muted">TB Risk Assessment</p>
+              <p className="text-xs text-[#606C38]/75">TB Risk Assessment</p>
             </div>
           )}
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto p-3">
+      <nav className="sidebar-scroll min-h-0 flex-1 overflow-y-auto p-3">
         {navSections.map((section) => (
           <div key={section.title} className="mb-6">
             {!collapsed && (
-              <h2 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-sidebar-muted">
+              <h2 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-[#606C38]/65">
                 {section.title}
               </h2>
             )}
@@ -187,7 +185,7 @@ export function AppSidebar({ role }: AppSidebarProps) {
       </nav>
 
       {/* Bottom section */}
-      <div className="border-t border-sidebar-border p-3">
+      <div className="border-t border-[#DDE5B6] p-3">
         <div className="space-y-1">
           <NavItemComponent
             item={{ title: "Profile", href: `/${role}/profile`, icon: UserCircle }}
@@ -201,9 +199,9 @@ export function AppSidebar({ role }: AppSidebarProps) {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={onToggleCollapsed}
           className={cn(
-            "mt-4 w-full text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            "mt-4 w-full text-[#2D3B1E] hover:bg-[#DDE5B6]/50 hover:text-[#2D3B1E]",
             collapsed && "px-0"
           )}
         >

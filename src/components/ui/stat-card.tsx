@@ -25,44 +25,44 @@ export function StatCard({
   className,
 }: StatCardProps) {
   const variantStyles = {
-    default: "bg-card border-border",
-    primary: "bg-primary/5 border-primary/20",
-    warning: "bg-amber-50 border-amber-200",
-    danger: "bg-red-50 border-red-200",
+    default: "bg-[linear-gradient(145deg,rgba(255,255,255,0.9),rgba(244,247,244,0.95))] border-[#DDE5B6]",
+    primary: "bg-[linear-gradient(145deg,rgba(221,229,182,0.42),rgba(244,247,244,0.92))] border-[#606C38]/20",
+    warning: "bg-[linear-gradient(145deg,rgba(221,229,182,0.28),rgba(255,250,230,0.95))] border-[#DDE5B6]",
+    danger: "bg-[linear-gradient(145deg,rgba(255,246,238,0.98),rgba(244,247,244,0.95))] border-[#DDE5B6]",
   };
 
   const iconStyles = {
-    default: "bg-muted text-muted-foreground",
-    primary: "bg-primary/10 text-primary",
-    warning: "bg-amber-100 text-amber-600",
-    danger: "bg-red-100 text-red-600",
+    default: "bg-[#DDE5B6]/45 text-[#606C38]",
+    primary: "bg-[#606C38]/10 text-[#606C38]",
+    warning: "bg-[#DDE5B6]/55 text-[#606C38]",
+    danger: "bg-[#DDE5B6]/35 text-[#2D3B1E]",
   };
 
   return (
     <div
       className={cn(
-        "rounded-xl border p-5 transition-all duration-200 card-hover",
+        "dashboard-surface rounded-2xl border p-5 transition-all duration-200 card-hover",
         variantStyles[variant],
         className
       )}
     >
       <div className="flex items-start justify-between">
         <div className="space-y-1">
-          <p className="text-sm font-medium text-muted-foreground">{title}</p>
-          <p className="text-3xl font-semibold tracking-tight">{value}</p>
+          <p className="text-sm font-medium text-[#2D3B1E]/70">{title}</p>
+          <p className="text-3xl font-semibold tracking-tight text-[#2D3B1E]">{value}</p>
           {description && (
-            <p className="text-sm text-muted-foreground">{description}</p>
+            <p className="text-sm text-[#2D3B1E]/65">{description}</p>
           )}
           {trend && (
             <div
               className={cn(
                 "inline-flex items-center text-sm font-medium",
-                trend.isPositive ? "text-emerald-600" : "text-red-600"
+                trend.isPositive ? "text-[#606C38]" : "text-[#8c3d2f]"
               )}
             >
               <span>{trend.isPositive ? "↑" : "↓"}</span>
               <span className="ml-1">{Math.abs(trend.value)}%</span>
-              <span className="ml-1 text-muted-foreground font-normal">vs last month</span>
+              <span className="ml-1 text-[#2D3B1E]/55 font-normal">vs last month</span>
             </div>
           )}
         </div>

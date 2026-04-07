@@ -120,7 +120,7 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#F8F9FA]">
+      <div className="dashboard-shell flex h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-[#606C38]" />
       </div>
     );
@@ -205,9 +205,9 @@ function QuickActionCard({ icon: Icon, title, description, onClick }: { icon: Re
   return (
     <button 
       onClick={onClick} 
-      className="flex items-start gap-4 rounded-xl border border-[#DDE5B6] bg-white p-4 text-left transition-all duration-200 hover:shadow-md hover:border-[#606C38]/50 w-full"
+      className="dashboard-surface flex w-full items-start gap-4 rounded-2xl border-[#DDE5B6] p-4 text-left transition-all duration-200 hover:border-[#606C38]/45 hover:shadow-md"
     >
-      <div className="rounded-lg bg-[#FEFAE0] p-2.5">
+      <div className="rounded-lg bg-[#DDE5B6]/45 p-2.5">
         <Icon className="h-5 w-5 text-[#606C38]" />
       </div>
       <div>

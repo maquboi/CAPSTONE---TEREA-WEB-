@@ -17,7 +17,7 @@ interface RecentActivityCardProps {
 
 export function RecentActivityCard({ activities }: RecentActivityCardProps) {
   return (
-    <Card className="h-full border-[#DDE5B6] shadow-sm bg-white">
+    <Card className="dashboard-surface h-full rounded-2xl border-[#DDE5B6]">
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2">
           <Activity className="h-4 w-4 text-[#606C38]" />

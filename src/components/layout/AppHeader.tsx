@@ -21,11 +21,11 @@ export function AppHeader({ userName, userRole }: AppHeaderProps) {
   const rolePrefix = location.pathname.startsWith("/admin") ? "admin" : "doctor";
 
   return (
-    <header className="flex h-16 items-center justify-end border-b border-[#DDE5B6]/50 bg-white px-6 shadow-sm">
+    <header className="dashboard-panel flex h-16 items-center justify-end border-b border-[#DDE5B6]/70 px-6 text-[#2D3B1E]">
       <div className="flex items-center gap-4">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative hover:bg-[#FEFAE0]">
+            <Button variant="ghost" size="icon" className="relative hover:bg-[#DDE5B6]/45">
               <Bell className="h-5 w-5 text-[#606C38]" />
               <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">3</span>
             </Button>
@@ -47,13 +47,13 @@ export function AppHeader({ userName, userRole }: AppHeaderProps) {
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="flex items-center gap-3 px-2 hover:bg-[#FEFAE0]/50">
+            <Button variant="ghost" className="flex items-center gap-3 px-2 hover:bg-[#DDE5B6]/35">
               <Avatar className="h-8 w-8">
                 <AvatarFallback className="bg-[#606C38] text-white text-sm font-semibold">{initials}</AvatarFallback>
               </Avatar>
               <div className="hidden text-left md:block">
                 <p className="text-sm font-bold text-[#2D3B1E]">{userName}</p>
-                <Badge variant="secondary" className="mt-0.5 text-[10px] bg-[#FEFAE0] text-[#606C38] hover:bg-[#DDE5B6] border-none">{userRole}</Badge>
+                <Badge variant="secondary" className="mt-0.5 border-none bg-[#DDE5B6]/55 text-[10px] font-semibold text-[#606C38] hover:bg-[#DDE5B6]/70">{userRole}</Badge>
               </div>
             </Button>
           </DropdownMenuTrigger>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { ArrowLeft, Building2, Eye, EyeOff, Loader2, ShieldCheck, Stethoscope } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -80,78 +80,94 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#F4F7F4] overflow-hidden">
-      
-      {/* Left side - Image Placeholder & Branding */}
-      <div 
-        className="hidden lg:flex lg:w-1/2 relative bg-cover bg-center"
-        style={{ 
-          // 👉 PASTE YOUR BACKGROUND IMAGE URL HERE:
+    <div className="auth-shell relative flex min-h-screen overflow-hidden bg-[#F4F7F4]">
+      <div className="auth-ambient auth-blob-one" aria-hidden="true" />
+      <div className="auth-ambient auth-blob-two" aria-hidden="true" />
+
+      <div
+        className="relative hidden lg:flex lg:w-[52%] bg-cover bg-center"
+        style={{
           backgroundImage: "url('https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?q=80&w=2070&auto=format&fit=crop')",
-          backgroundColor: "#DDE5B6" // Fallback color while image loads
+          backgroundColor: "#DDE5B6"
         }}
       >
-        {/* Modern Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#2D3B1E]/95 via-[#2D3B1E]/50 to-transparent"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-[#2D3B1E]/90 via-[#2D3B1E]/74 to-[#606C38]/70" />
 
-        <div className="relative z-10 flex flex-col justify-between w-full p-12">
-          {/* Top Logo */}
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20 backdrop-blur-md shadow-sm border border-white/30">
-              <span className="text-2xl font-extrabold text-white">T</span>
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-white drop-shadow-md">TEREA</h1>
-              <p className="text-xs text-white/90 font-medium tracking-wide drop-shadow-md">TB Risk Assessment Platform</p>
-            </div>
-          </div>
-
-          {/* Bottom Content (Stats removed) */}
+        <div className="relative z-10 flex w-full flex-col justify-between p-12 xl:p-14">
           <div className="space-y-8">
-            <div className="space-y-3">
-              <h2 className="text-4xl font-bold leading-tight text-white">
-                Empowering Carmona's<br />
-                <span className="text-[#DDE5B6]">Fight Against TB</span>
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/35 bg-white/20 shadow-lg backdrop-blur-md">
+                <span className="text-2xl font-extrabold text-white">T</span>
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight text-white">TEREA</h1>
+                <p className="text-xs font-semibold tracking-[0.14em] text-[#DDE5B6]">TB RISK ASSESSMENT PLATFORM</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h2 className="text-[2.6rem] font-extrabold leading-[1.05] tracking-[-0.03em] text-white xl:text-5xl">
+                Secure clinical access for faster TB response.
               </h2>
-              <p className="text-white/80 max-w-md leading-relaxed text-base">
-                AI-assisted risk assessment and patient monitoring platform designed 
-                for healthcare workers in the Municipality of Carmona.
+              <p className="max-w-lg text-base leading-relaxed text-white/85">
+                Unified sign-in for care teams managing assessments, follow-ups, and patient risk alerts in Carmona.
               </p>
             </div>
-            
-            <p className="text-xs text-white/50 pt-4 border-t border-white/10">
-              © 2026 TEREA. Municipality of Carmona Health Office.
-            </p>
+
+            <div className="grid max-w-xl gap-3 sm:grid-cols-2">
+              <div className="auth-info-card">
+                <ShieldCheck className="h-5 w-5 text-[#DDE5B6]" />
+                <span>Role-based access control</span>
+              </div>
+              <div className="auth-info-card">
+                <Stethoscope className="h-5 w-5 text-[#DDE5B6]" />
+                <span>Doctor workflow ready</span>
+              </div>
+              <div className="auth-info-card sm:col-span-2">
+                <Building2 className="h-5 w-5 text-[#DDE5B6]" />
+                <span>Built for Municipality of Carmona health operations</span>
+              </div>
+            </div>
           </div>
+
+          <p className="border-t border-white/15 pt-5 text-xs tracking-wide text-white/70">
+            © 2026 TEREA. Municipality of Carmona Health Office.
+          </p>
         </div>
       </div>
 
-      {/* Right side - Login Form */}
-      <div className="flex flex-1 items-center justify-center p-6 sm:p-12 bg-white lg:rounded-l-[2.5rem] lg:shadow-[-20px_0_40px_-15px_rgba(0,0,0,0.05)] z-10">
-        <div className="w-full max-w-[420px] space-y-8 animate-fade-in">
-          
-          {/* Mobile logo */}
-          <div className="lg:hidden flex items-center justify-center gap-3 mb-6">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#606C38] shadow-md">
-              <span className="text-2xl font-bold text-white">T</span>
+      <div className="relative z-10 flex flex-1 items-center justify-center p-5 sm:p-9 lg:p-12">
+        <div className="auth-form-card w-full max-w-[500px] space-y-7 rounded-[2rem] p-6 sm:p-8 md:p-10">
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => navigate("/")}
+              className="inline-flex items-center gap-2 rounded-lg border border-[#606C38]/30 bg-[#DDE5B6]/35 px-3 py-1.5 text-sm font-semibold text-[#2D3B1E] transition-all hover:border-[#606C38] hover:bg-[#DDE5B6]/60"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </button>
+          </div>
+
+          <div className="lg:hidden flex items-center justify-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#606C38] shadow-md">
+              <span className="text-xl font-bold text-white">T</span>
             </div>
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-[#2D3B1E]">TEREA</h1>
-              <p className="text-xs text-slate-500 font-medium">TB Risk Assessment</p>
+              <p className="text-xs font-semibold tracking-wider text-[#606C38]">RISK ASSESSMENT</p>
             </div>
           </div>
 
           <div className="space-y-2 text-center lg:text-left">
-            <h2 className="text-3xl font-extrabold tracking-tight text-[#2D3B1E]">Welcome back</h2>
-            <p className="text-sm text-slate-500 font-medium">
-              Sign in to your staff portal
-            </p>
+            <h2 className="text-3xl font-extrabold tracking-[-0.02em] text-[#2D3B1E]">Welcome back</h2>
+            <p className="text-sm font-medium text-slate-500">Sign in to continue to your staff portal</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5 pt-2">
+          <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <div className="rounded-xl bg-red-50 p-4 text-sm text-red-600 border border-red-100 flex items-center">
-                <div className="bg-red-100 p-1.5 rounded-full mr-3 shrink-0">
+              <div className="flex items-center rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-600">
+                <div className="mr-3 shrink-0 rounded-full bg-red-100 p-1.5">
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
                 </div>
                 {error}
@@ -159,9 +175,9 @@ export default function Login() {
             )}
 
             <div className="space-y-2.5">
-              <Label htmlFor="role" className="text-[#2D3B1E] font-bold text-xs uppercase tracking-wide">Sign in as</Label>
+              <Label htmlFor="role" className="text-xs font-bold uppercase tracking-wide text-[#2D3B1E]">Sign in as</Label>
               <Select value={role} onValueChange={setRole}>
-                <SelectTrigger id="role" className="bg-slate-50 border-slate-200 h-12 rounded-xl text-slate-700 focus:ring-[#606C38] focus:border-[#606C38] transition-all">
+                <SelectTrigger id="role" className="h-12 rounded-xl border-[#606C38]/20 bg-[#F4F7F4] text-slate-700 transition-all focus:border-[#606C38] focus:ring-[#606C38]">
                   <SelectValue placeholder="Select your role" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl border-slate-200 shadow-lg">
@@ -172,23 +188,23 @@ export default function Login() {
             </div>
 
             <div className="space-y-2.5">
-              <Label htmlFor="email" className="text-[#2D3B1E] font-bold text-xs uppercase tracking-wide">Email address</Label>
+              <Label htmlFor="email" className="text-xs font-bold uppercase tracking-wide text-[#2D3B1E]">Email address</Label>
               <Input
                 id="email"
                 type="email"
                 placeholder="name@carmona.gov.ph"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="bg-slate-50 border-slate-200 h-12 rounded-xl text-slate-700 placeholder:text-slate-400 focus-visible:ring-[#606C38] focus-visible:border-[#606C38] transition-all"
+                className="h-12 rounded-xl border-[#606C38]/20 bg-[#F4F7F4] text-slate-700 placeholder:text-slate-400 transition-all focus-visible:border-[#606C38] focus-visible:ring-[#606C38]"
               />
             </div>
 
             <div className="space-y-2.5">
               <div className="flex items-center justify-between">
-                <Label htmlFor="password" className="text-[#2D3B1E] font-bold text-xs uppercase tracking-wide">Password</Label>
+                <Label htmlFor="password" className="text-xs font-bold uppercase tracking-wide text-[#2D3B1E]">Password</Label>
                 <button
                   type="button"
-                  className="text-xs font-semibold text-[#606C38] hover:text-[#2D3B1E] transition-colors"
+                  className="text-xs font-semibold text-[#606C38] transition-colors hover:text-[#2D3B1E]"
                 >
                   Forgot password?
                 </button>
@@ -200,12 +216,12 @@ export default function Login() {
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="bg-slate-50 border-slate-200 h-12 rounded-xl text-slate-700 pr-10 placeholder:text-slate-400 focus-visible:ring-[#606C38] focus-visible:border-[#606C38] transition-all"
+                  className="h-12 rounded-xl border-[#606C38]/20 bg-[#F4F7F4] pr-10 text-slate-700 placeholder:text-slate-400 transition-all focus-visible:border-[#606C38] focus-visible:ring-[#606C38]"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#606C38] transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-[#606C38]"
                 >
                   {showPassword ? (
                     <EyeOff className="h-5 w-5" />
@@ -218,7 +234,7 @@ export default function Login() {
 
             <Button
               type="submit"
-              className="w-full h-12 mt-6 bg-[#606C38] hover:bg-[#4A5529] text-white rounded-xl shadow-sm transition-all font-bold text-sm"
+              className="btn-premium mt-6 h-12 w-full rounded-xl bg-[#606C38] text-sm font-bold text-white shadow-sm hover:bg-[#4A5529]"
               disabled={isLoading}
             >
               {isLoading ? (
@@ -232,10 +248,10 @@ export default function Login() {
             </Button>
           </form>
 
-          <div className="pt-6 text-center">
+          <div className="border-t border-[#606C38]/15 pt-5 text-center">
             <p className="text-sm text-slate-500">
               Need access?{" "}
-              <button className="font-semibold text-[#606C38] hover:text-[#2D3B1E] transition-colors">
+              <button className="font-semibold text-[#606C38] transition-colors hover:text-[#2D3B1E]">
                 Contact IT Support
               </button>
             </p>

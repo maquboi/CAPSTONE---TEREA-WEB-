@@ -101,13 +101,15 @@ export function PatientQueueTable({ search, riskFilter, statusFilter }: PatientQ
   });
 
   return (
-    <Card>
-      <CardHeader><CardTitle className="text-base font-semibold">Active Queue</CardTitle></CardHeader>
+    <Card className="dashboard-surface rounded-2xl border-[#DDE5B6]">
+      <CardHeader>
+        <CardTitle className="text-base font-semibold text-[#2D3B1E]">Active Queue</CardTitle>
+      </CardHeader>
       <CardContent>
-        <div className="rounded-md border overflow-hidden">
+        <div className="overflow-hidden rounded-xl border border-[#DDE5B6] bg-[#F4F7F4]">
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/50">
+              <TableRow className="bg-[#DDE5B6]/30">
                 <TableHead>Patient Name</TableHead>
                 <TableHead>Barangay</TableHead>
                 <TableHead>Risk Level</TableHead>

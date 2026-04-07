@@ -137,7 +137,7 @@ export default function DoctorDashboard() {
           </div>
 
           {!loading && (
-            <div className="flex items-center gap-3 bg-white border border-[#DDE5B6] p-2 pr-4 rounded-xl shadow-sm">
+            <div className="dashboard-surface flex items-center gap-3 rounded-xl border-[#DDE5B6] p-2 pr-4">
               <div className="flex flex-col">
                 <span className="text-[10px] uppercase font-bold text-[#606C38]/70 tracking-wider">Your Clinical Code</span>
                 <span className="font-mono text-lg font-bold text-[#2D3B1E] tracking-wide">{doctorData.clinicCode}</span>
