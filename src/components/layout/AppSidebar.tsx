@@ -9,10 +9,8 @@ import {
   HelpCircle,
   ChevronLeft,
   ChevronRight,
-  MapPin,
   FileText,
   AlertTriangle,
-  Key,
   UserCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -40,14 +38,12 @@ const adminNavSections: NavSection[] = [
     title: "Overview",
     items: [
       { title: "Analytics Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
-      { title: "Heatmap", href: "/admin/heatmap", icon: MapPin },
     ],
   },
   {
     title: "Management",
     items: [
       { title: "User Management", href: "/admin/users", icon: Users },
-      { title: "Keyword Manager", href: "/admin/keywords", icon: Key },
       { title: "FAQs Management", href: "/admin/faqs", icon: HelpCircle },
     ],
   },

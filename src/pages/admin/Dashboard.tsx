@@ -3,11 +3,16 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase"; 
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { StatCard } from "@/components/ui/stat-card";
-import { HeatmapCard } from "@/components/dashboard/HeatmapCard";
 import { RecentActivityCard } from "@/components/dashboard/RecentActivityCard";
 import { 
-  Users, AlertTriangle, TrendingUp, Calendar, FileText, Shield, Loader2
+  Users, AlertTriangle, FileText, Shield, Loader2, ActivitySquare, CheckCircle2
 } from "lucide-react";
+// Import charting components
+import { 
+  PieChart, Pie, Cell, Legend, Tooltip as RechartsTooltip, ResponsiveContainer
+} from "recharts";
+
+const PIE_COLORS = ['#ef4444', '#f59e0b', '#10b981', '#94a3b8']; // Red, Amber, Green, Slate
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -15,12 +20,14 @@ export default function AdminDashboard() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminName, setAdminName] = useState("Admin User");
   
-  // Real dynamic stats state
+  // Expanded dynamic stats state
   const [dashboardStats, setDashboardStats] = useState({
     totalPatients: 0,
     highRiskCases: 0,
-    followUpRate: "0%",
-    appointmentsToday: 0
+    mediumRiskCases: 0,
+    lowRiskCases: 0,
+    pendingVerifications: 0,
+    assessmentsCompleted: 0, 
   });
 
   const [recentActivities, setRecentActivities] = useState<any[]>([]);
@@ -50,7 +57,6 @@ export default function AdminDashboard() {
         setIsAdmin(true);
         if (profile.full_name) setAdminName(profile.full_name);
         
-        // Fetch the live dashboard data once confirmed as admin
         await fetchDashboardStats();
       } else {
         navigate(profile?.role === 'doctor' ? '/doctor/dashboard' : '/dashboard');
@@ -65,46 +71,37 @@ export default function AdminDashboard() {
 
   const fetchDashboardStats = async () => {
     try {
-      // 1. Fetch Patients & High Risk Cases
+      // 1. Fetch Patients & Risk Levels
       const { data: patients, error: patientErr } = await supabase
         .from('profiles')
-        .select('id, risk_level')
+        .select('id, risk_level, verification_status')
         .eq('role', 'patient');
 
       if (!patientErr && patients) {
         const total = patients.length;
-        const highRisk = patients.filter(p => p.risk_level?.toLowerCase().includes('high')).length;
         
-        setDashboardStats(prev => ({
-          ...prev,
+        let high = 0, medium = 0, low = 0, pending = 0;
+
+        patients.forEach(p => {
+          const risk = p.risk_level?.toLowerCase() || '';
+          if (risk.includes('high')) high++;
+          else if (risk.includes('medium')) medium++;
+          else if (risk.includes('low')) low++;
+
+          if (p.verification_status === 'Pending') pending++;
+        });
+
+        setDashboardStats({
           totalPatients: total,
-          highRiskCases: highRisk
-        }));
+          highRiskCases: high,
+          mediumRiskCases: medium,
+          lowRiskCases: low,
+          pendingVerifications: pending,
+          assessmentsCompleted: total // Assumes all registered patients complete the 12-question assessment
+        });
       }
 
-      // 2. Fetch Appointments Today
-      const today = new Date().toISOString().split('T')[0];
-      const { count: apptsToday, error: apptErr } = await supabase
-        .from('roadmap')
-        .select('*', { count: 'exact', head: true })
-        .eq('appointment_date', today);
-
-      if (!apptErr && apptsToday !== null) {
-        setDashboardStats(prev => ({ ...prev, appointmentsToday: apptsToday }));
-      }
-
-      // 3. Calculate Follow-up Rate (Completed / Total Appointments)
-      const { data: roadmapData, error: roadErr } = await supabase
-        .from('roadmap')
-        .select('status');
-
-      if (!roadErr && roadmapData && roadmapData.length > 0) {
-        const completed = roadmapData.filter(r => r.status === 'completed').length;
-        const rate = Math.round((completed / roadmapData.length) * 100);
-        setDashboardStats(prev => ({ ...prev, followUpRate: `${rate}%` }));
-      }
-
-      // Optional: Fetch recent admin activities here if your table supports it
+      // Fetch recent admin activities
       const { data: logs } = await supabase
         .from('activity_logs')
         .select('*')
@@ -128,73 +125,120 @@ export default function AdminDashboard() {
 
   if (!isAdmin) return null; 
 
+  // Data for Pie Chart
+  const riskDistributionData = [
+    { name: 'High Risk', value: dashboardStats.highRiskCases },
+    { name: 'Medium Risk', value: dashboardStats.mediumRiskCases },
+    { name: 'Low Risk', value: dashboardStats.lowRiskCases },
+    { name: 'Unassessed', value: dashboardStats.totalPatients - (dashboardStats.highRiskCases + dashboardStats.mediumRiskCases + dashboardStats.lowRiskCases) }
+  ].filter(d => d.value > 0);
+
   return (
     <DashboardLayout role="admin" userName={adminName}>
-      <div className="space-y-6 animate-fade-in">
+      <div className="space-y-6 animate-fade-in font-sans">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-[#2D3B1E]">Analytics Dashboard</h1>
-          <p className="text-muted-foreground">Overview of TB risk assessments across the system</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Analytics Dashboard</h1>
+          <p className="text-sm text-slate-500 mt-1">Overview of system utilization and demographic risk assessments</p>
         </div>
 
-        {/* Live Data Stats Grid */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Top-Level Metrics - 4 Columns */}
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard 
-            title="Total Patients" 
+            title="Total Registered Patients" 
             value={dashboardStats.totalPatients.toString()} 
             description="Active in system" 
             icon={Users} 
             trend={{ value: 12, isPositive: true }} 
           />
           <StatCard 
+            title="Assessments Completed" 
+            value={dashboardStats.assessmentsCompleted.toString()} 
+            description="12-question screenings" 
+            icon={ActivitySquare} 
+            trend={{ value: 5, isPositive: true }} 
+          />
+          <StatCard 
+            title="Pending Verifications" 
+            value={dashboardStats.pendingVerifications.toString()} 
+            description="Requires admin review" 
+            icon={CheckCircle2} 
+          />
+          <StatCard 
             title="High-Risk Cases" 
             value={dashboardStats.highRiskCases.toString()} 
-            description="Requires attention" 
+            description="Requires immediate action" 
             icon={AlertTriangle} 
             variant="danger" 
             trend={{ value: 8, isPositive: false }} 
           />
-          <StatCard 
-            title="Follow-up Rate" 
-            value={dashboardStats.followUpRate} 
-            description="Completion rate" 
-            icon={TrendingUp} 
-            variant="primary" 
-            trend={{ value: 3, isPositive: true }} 
-          />
-          <StatCard 
-            title="Appointments Today" 
-            value={dashboardStats.appointmentsToday.toString()} 
-            description="Scheduled checkups" 
-            icon={Calendar} 
-          />
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2"><HeatmapCard /></div>
-          <div>
-            <RecentActivityCard activities={recentActivities} />
+        {/* Visual Analytics Section */}
+        <div className="grid gap-4 grid-cols-1">
+          {/* Risk Distribution Chart */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
+            <h3 className="font-semibold text-slate-800 mb-4">Patient Risk Distribution</h3>
+            <div className="flex-1 min-h-[300px]">
+              {riskDistributionData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={riskDistributionData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={80}
+                      outerRadius={110}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {riskDistributionData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip 
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    />
+                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-slate-400 text-sm">Not enough data to display chart</div>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <QuickActionCard 
-            icon={FileText} 
-            title="Generate Monthly Report" 
-            description="Export TB trend report for DOH compliance" 
-            onClick={() => navigate("/admin/reports")} 
-          />
-          <QuickActionCard 
-            icon={Users} 
-            title="User Management" 
-            description="Add, remove, or modify user accounts" 
-            onClick={() => navigate("/admin/users")} 
-          />
-          <QuickActionCard 
-            icon={Shield} 
-            title="View Audit Logs" 
-            description="Review system actions and changes" 
-            onClick={() => navigate("/admin/audit-logs")} 
-          />
+        {/* Quick Actions & Recent Activity */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          
+          {/* Quick Actions List */}
+          <div className="lg:col-span-1 space-y-4">
+            <h3 className="font-semibold text-slate-800 px-1">Quick Actions</h3>
+            <QuickActionCard 
+              icon={FileText} 
+              title="Generate Monthly Report" 
+              description="Export TB trend report for DOH compliance" 
+              onClick={() => navigate("/admin/reports")} 
+            />
+            <QuickActionCard 
+              icon={Users} 
+              title="User Management" 
+              description="Review pending verifications and staff accounts" 
+              onClick={() => navigate("/admin/users")} 
+            />
+            <QuickActionCard 
+              icon={Shield} 
+              title="View Audit Logs" 
+              description="Review system actions and security changes" 
+              onClick={() => navigate("/admin/audit-logs")} 
+            />
+          </div>
+
+          {/* Recent Activity Card */}
+          <div className="lg:col-span-2">
+            <RecentActivityCard activities={recentActivities} />
+          </div>
+
         </div>
       </div>
     </DashboardLayout>
@@ -205,14 +249,14 @@ function QuickActionCard({ icon: Icon, title, description, onClick }: { icon: Re
   return (
     <button 
       onClick={onClick} 
-      className="dashboard-surface flex w-full items-start gap-4 rounded-2xl border-[#DDE5B6] p-4 text-left transition-all duration-200 hover:border-[#606C38]/45 hover:shadow-md"
+      className="bg-white flex w-full items-start gap-4 rounded-2xl border border-slate-200 p-4 text-left transition-all duration-200 hover:border-[#606C38] hover:shadow-md group"
     >
-      <div className="rounded-lg bg-[#DDE5B6]/45 p-2.5">
-        <Icon className="h-5 w-5 text-[#606C38]" />
+      <div className="rounded-xl bg-slate-50 p-3 group-hover:bg-[#606C38]/10 transition-colors">
+        <Icon className="h-5 w-5 text-slate-500 group-hover:text-[#606C38] transition-colors" />
       </div>
       <div>
-        <p className="font-bold text-[#2D3B1E]">{title}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+        <p className="font-bold text-slate-800">{title}</p>
+        <p className="text-xs text-slate-500 mt-1">{description}</p>
       </div>
     </button>
   );

@@ -11,7 +11,6 @@ import NotFound from "./pages/NotFound";
 
 // Admin Pages
 import AdminDashboard from "./pages/admin/Dashboard";
-import Heatmap from "./pages/admin/Heatmap";
 import UserManagement from "./pages/admin/UserManagement";
 import KeywordManager from "./pages/admin/KeywordManager";
 import FAQsManagement from "./pages/admin/FAQsManagement";
@@ -46,7 +45,6 @@ const App = () => (
           
           {/* Admin routes */}
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
-          <Route path="/admin/heatmap" element={<Heatmap />} />
           <Route path="/admin/users" element={<UserManagement />} />
           <Route path="/admin/keywords" element={<KeywordManager />} />
           <Route path="/admin/faqs" element={<FAQsManagement />} />
