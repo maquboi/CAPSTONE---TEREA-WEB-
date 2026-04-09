@@ -6,7 +6,6 @@ import {
   Calendar,
   Activity,
   Settings,
-  HelpCircle,
   ChevronLeft,
   ChevronRight,
   FileText,
@@ -14,7 +13,6 @@ import {
   UserCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
@@ -44,7 +42,6 @@ const adminNavSections: NavSection[] = [
     title: "Management",
     items: [
       { title: "User Management", href: "/admin/users", icon: Users },
-      { title: "FAQs Management", href: "/admin/faqs", icon: HelpCircle },
     ],
   },
   {
@@ -140,10 +137,23 @@ export function AppSidebar({ role, collapsed, onToggleCollapsed }: AppSidebarPro
   return (
     <aside
       className={cn(
-        "sidebar-rail fixed inset-y-0 left-0 z-40 shrink-0 flex h-screen flex-col overflow-hidden border-r border-[#DDE5B6] bg-[#F4F7F4]/96 text-[#2D3B1E] transition-all duration-300 ease-in-out backdrop-blur-xl",
+        "sidebar-rail fixed inset-y-0 left-0 z-40 shrink-0 flex h-screen flex-col border-r border-[#DDE5B6] bg-[#F4F7F4]/96 text-[#2D3B1E] transition-all duration-300 ease-in-out backdrop-blur-xl",
         collapsed ? "w-16" : "w-64"
       )}
     >
+      {/* Edge Collapse Toggle */}
+      <button
+        onClick={onToggleCollapsed}
+        className="absolute -right-3 top-1/2 z-50 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-[#DDE5B6] bg-white text-[#2D3B1E] shadow-sm hover:bg-[#DDE5B6] transition-colors focus:outline-none"
+        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      >
+        {collapsed ? (
+          <ChevronRight className="h-4 w-4" />
+        ) : (
+          <ChevronLeft className="h-4 w-4" />
+        )}
+      </button>
+
       {/* Logo */}
       <div className={cn(
         "flex h-16 items-center border-b border-[#DDE5B6] px-4",
@@ -163,7 +173,7 @@ export function AppSidebar({ role, collapsed, onToggleCollapsed }: AppSidebarPro
       </div>
 
       {/* Navigation */}
-      <nav className="sidebar-scroll min-h-0 flex-1 overflow-y-auto p-3">
+      <nav className="sidebar-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3">
         {navSections.map((section) => (
           <div key={section.title} className="mb-6">
             {!collapsed && (
@@ -190,26 +200,6 @@ export function AppSidebar({ role, collapsed, onToggleCollapsed }: AppSidebarPro
             item={{ title: "Settings", href: `/${role}/settings`, icon: Settings }}
           />
         </div>
-
-        {/* Collapse toggle */}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onToggleCollapsed}
-          className={cn(
-            "mt-4 w-full text-[#2D3B1E] hover:bg-[#DDE5B6]/50 hover:text-[#2D3B1E]",
-            collapsed && "px-0"
-          )}
-        >
-          {collapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <>
-              <ChevronLeft className="h-4 w-4 mr-2" />
-              <span>Collapse</span>
-            </>
-          )}
-        </Button>
       </div>
     </aside>
   );

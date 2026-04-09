@@ -53,6 +53,26 @@ export default function PatientDetail() {
 
   const [newMed, setNewMed] = useState({ name: "", dosage: "", time: "08:00", start: "", end: "" });
 
+  // --- Audit Logging Helper ---
+  const createAuditLog = async (action: string, category: string, target: string, metadata: any = {}, severity: string = 'info') => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      // We use the full_name from the current session or a default label
+      const userName = user?.user_metadata?.full_name || "Doctor/Admin";
+
+      await supabase.from('audit_logs').insert({
+        action_name: action,
+        user_name: userName,
+        target_entity: target,
+        category: category,
+        severity: severity,
+        metadata: metadata
+      });
+    } catch (err) {
+      console.error("Failed to create audit log:", err);
+    }
+  };
+
   useEffect(() => {
     fetchData();
   }, [id]);
@@ -70,6 +90,14 @@ export default function PatientDetail() {
       if (profileErr) throw profileErr;
       setPatient(profile);
       
+      // LOG ACCESS: Every time the profile is successfully loaded/viewed
+      createAuditLog(
+        "Patient Record Viewed", 
+        "Patient Access", 
+        profile.full_name, 
+        { access_point: "Doctor Dashboard Detail Page" }
+      );
+
       if (profile?.treatment_start_date) setStartDate(profile.treatment_start_date);
       if (profile?.treatment_end_date) setEndDate(profile.treatment_end_date);
 
@@ -119,10 +147,6 @@ export default function PatientDetail() {
         .select();
 
       if (profileError) throw profileError;
-      
-      if (!profileData || profileData.length === 0) {
-        throw new Error("Profile update failed. Verify RLS policies and Patient ID.");
-      }
 
       const { error: connError } = await supabase
         .from('connections')
@@ -131,19 +155,23 @@ export default function PatientDetail() {
 
       if (connError) throw connError;
 
+      // LOG ACTION: Treatment timeline change
+      createAuditLog(
+        "Treatment Timeline Updated", 
+        "Patient Access", 
+        patient?.full_name, 
+        { start_date: startDate, end_date: endDate },
+        'warning' // Highlighting as a significant clinical change
+      );
+
       toast({ 
         title: "Success", 
-        description: "Treatment activated. Roadmap is now synced to patient's phone." 
+        description: "Treatment activated. Roadmap is now synced." 
       });
       
       fetchData(); 
     } catch (err: any) {
-      console.error("Critical Sync Error:", err);
-      toast({ 
-        variant: "destructive", 
-        title: "Sync Failed", 
-        description: err.message 
-      });
+      toast({ variant: "destructive", title: "Sync Failed", description: err.message });
     } finally {
       setSaving(false);
     }
@@ -151,11 +179,7 @@ export default function PatientDetail() {
 
   const handleGenerateProtocol = async () => {
     if (!startDate) {
-      toast({ 
-        variant: "destructive", 
-        title: "Start Date Required", 
-        description: "Please set and save the Treatment Start Date first to calculate milestones." 
-      });
+      toast({ variant: "destructive", title: "Start Date Required" });
       return;
     }
 
@@ -171,42 +195,23 @@ export default function PatientDetail() {
       };
 
       const protocolMilestones = [
-        {
-          patient_id: id,
-          doctor_id: user?.id,
-          title: "End of Intensive Phase Sputum Test",
-          location: "TB DOTS Clinic",
-          appointment_date: addDays(start, 60), 
-          status: "pending",
-          type: "protocol"
-        },
-        {
-          patient_id: id,
-          doctor_id: user?.id,
-          title: "Month 5 Sputum Follow-up",
-          location: "TB DOTS Clinic",
-          appointment_date: addDays(start, 150), 
-          status: "pending",
-          type: "protocol"
-        },
-        {
-          patient_id: id,
-          doctor_id: user?.id,
-          title: "Final Sputum & Cure Assessment",
-          location: "TB DOTS Clinic",
-          appointment_date: addDays(start, 180), 
-          status: "pending",
-          type: "protocol"
-        }
+        { patient_id: id, doctor_id: user?.id, title: "End of Intensive Phase Sputum Test", location: "TB DOTS Clinic", appointment_date: addDays(start, 60), status: "pending", type: "protocol" },
+        { patient_id: id, doctor_id: user?.id, title: "Month 5 Sputum Follow-up", location: "TB DOTS Clinic", appointment_date: addDays(start, 150), status: "pending", type: "protocol" },
+        { patient_id: id, doctor_id: user?.id, title: "Final Sputum & Cure Assessment", location: "TB DOTS Clinic", appointment_date: addDays(start, 180), status: "pending", type: "protocol" }
       ];
 
       const { error } = await supabase.from('roadmap').insert(protocolMilestones);
       if (error) throw error;
 
-      toast({ 
-        title: "Protocol Generated", 
-        description: "DOH 6-Month Milestones successfully added to roadmap." 
-      });
+      // LOG ACTION: Protocol Generation
+      createAuditLog(
+        "TB Protocol Milestones Generated", 
+        "Reports", 
+        patient?.full_name, 
+        { milestones_count: protocolMilestones.length, clinical_standard: "DOH 6-Month" }
+      );
+
+      toast({ title: "Protocol Generated" });
       fetchData();
     } catch (err: any) {
       toast({ variant: "destructive", title: "Generation Failed", description: err.message });
@@ -217,11 +222,10 @@ export default function PatientDetail() {
 
   const handleAddPrescription = async () => {
     if (!newMed.name || !newMed.dosage || !newMed.time || !newMed.start || !newMed.end) {
-      toast({ variant: "destructive", title: "Missing Fields", description: "Please fill out all medication details." });
+      toast({ variant: "destructive", title: "Missing Fields" });
       return;
     }
     
-    // Format 24h time to 12h AM/PM for the mobile app UI
     let formattedTime = newMed.time;
     if (newMed.time.includes(":")) {
       const [h, m] = newMed.time.split(":");
@@ -245,7 +249,15 @@ export default function PatientDetail() {
 
       if (error) throw error;
       
-      toast({ title: "Prescription Added", description: "Medication pushed to patient's diary." });
+      // LOG ACTION: New Prescription
+      createAuditLog(
+        "New Medication Prescribed", 
+        "Patient Access", 
+        patient?.full_name, 
+        { medication: newMed.name, dosage: newMed.dosage }
+      );
+
+      toast({ title: "Prescription Added" });
       setNewMed({ name: "", dosage: "", time: "08:00", start: "", end: "" });
       fetchData();
     } catch (err: any) {
@@ -256,10 +268,21 @@ export default function PatientDetail() {
   };
 
   const handleDeletePrescription = async (medId: number) => {
+    const medToDelete = meds.find(m => m.id === medId);
     try {
       const { error } = await supabase.from('medications').delete().eq('id', medId);
       if (error) throw error;
-      toast({ title: "Prescription Removed", description: "Updated on patient's diary." });
+
+      // LOG ACTION: Remove Prescription
+      createAuditLog(
+        "Prescription Removed", 
+        "Patient Access", 
+        patient?.full_name, 
+        { medication: medToDelete?.name || "Unknown" },
+        'danger' // Significant clinical removal
+      );
+
+      toast({ title: "Prescription Removed" });
       fetchData();
     } catch (err: any) {
       toast({ variant: "destructive", title: "Error", description: err.message });
@@ -303,7 +326,7 @@ export default function PatientDetail() {
 
   return (
     <DashboardLayout role="doctor" userName="Doctor">
-      <div className="space-y-6 animate-fade-in">
+      <div className="space-y-6 animate-fade-in pb-10">
         <Button variant="ghost" onClick={() => navigate(-1)} className="gap-2 text-[#606C38] hover:bg-[#FEFAE0]">
           <ArrowLeft className="h-4 w-4" /> Back to Patient List
         </Button>
@@ -422,7 +445,7 @@ export default function PatientDetail() {
             </Card>
 
             <div className="grid gap-6 sm:grid-cols-2">
-               <Card className="shadow-sm border-[#DDE5B6]">
+              <Card className="shadow-sm border-[#DDE5B6]">
                 <CardHeader><CardTitle className="text-sm font-bold flex items-center gap-2 text-[#2D3B1E]"><CalendarDays className="h-4 w-4 text-[#606C38]" /> Roadmap Milestones</CardTitle></CardHeader>
                 <CardContent>
                   <Table>
@@ -459,12 +482,11 @@ export default function PatientDetail() {
               </Card>
 
               <Card className="shadow-sm border-[#DDE5B6]">
-                <CardHeader><CardTitle className="text-sm font-bold flex items-center gap-2 text-[#2D3B1E]"><Pill className="h-4 w-4 text-[#606C38]" /> Active Prescriptions</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-sm font-bold flex items-center gap-2 text-[#2D3B1E]"><Pill className="h-4 w-4 text-[#606C38]" /> Prescriptions</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                   
-                  {/* Doctor's Prescribe Form */}
                   <div className="p-3 bg-[#FEFAE0]/40 rounded-xl border border-[#DDE5B6] space-y-3">
-                    <p className="text-xs font-bold text-[#606C38] uppercase">New Prescription</p>
+                    <p className="text-xs font-bold text-[#606C38] uppercase">New Medication</p>
                     <div className="grid grid-cols-2 gap-2">
                       <Input placeholder="Meds Name" className="h-8 text-xs bg-white col-span-2" value={newMed.name} onChange={(e) => setNewMed({...newMed, name: e.target.value})} />
                       <Input placeholder="Dosage (500mg)" className="h-8 text-xs bg-white" value={newMed.dosage} onChange={(e) => setNewMed({...newMed, dosage: e.target.value})} />
@@ -475,13 +497,13 @@ export default function PatientDetail() {
                       </div>
                     </div>
                     <Button onClick={handleAddPrescription} size="sm" className="w-full h-8 bg-[#606C38]" disabled={prescribing}>
-                      {prescribing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3 mr-1" />} Push to Patient App
+                      {prescribing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3 mr-1" />} Push to Patient
                     </Button>
                   </div>
 
                   <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                     {meds.length === 0 ? (
-                       <p className="text-center text-xs text-muted-foreground py-4 italic">No active prescriptions.</p>
+                      <p className="text-center text-xs text-muted-foreground py-4 italic">No active prescriptions.</p>
                     ) : meds.map((med) => (
                       <div key={med.id} className="flex justify-between items-center p-2 rounded-lg bg-white border border-slate-100">
                         <div>
@@ -505,4 +527,4 @@ export default function PatientDetail() {
       </div>
     </DashboardLayout>
   );
-}
+} 

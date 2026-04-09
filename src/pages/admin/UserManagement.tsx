@@ -246,7 +246,8 @@ export default function UserManagement() {
         role: userRole,
         contact_number: newUser.contact,
         ...(userRole === "doctor" && { clinic_code: newUser.clinic_code, barangay: newUser.barangay, license_number: newUser.license_number }),
-        ...(userRole === "patient" && { age: parseInt(newUser.age), gender: newUser.gender, risk_level: "Pending", verification_status: "Verified" })
+        // Fixed: Removed verification_status from patient creation
+        ...(userRole === "patient" && { age: parseInt(newUser.age), gender: newUser.gender, risk_level: "Pending" })
       };
 
       const { error: profileError } = await supabaseAdmin.from('profiles').insert([profileData]);
@@ -287,6 +288,36 @@ export default function UserManagement() {
 
   const handleDeleteUser = async (user: User) => {
     try {
+      setIsSubmitting(true);
+
+      // --- NEW STEP: Delete the ID image from Storage First ---
+      if (user.id_attachment_url) {
+        try {
+          // Automatically extract the bucket name and file path from the public URL
+          const urlParts = user.id_attachment_url.split('/public/');
+          if (urlParts.length === 2) {
+            const bucketAndPath = urlParts[1];
+            const firstSlashIndex = bucketAndPath.indexOf('/');
+            const bucketName = bucketAndPath.substring(0, firstSlashIndex);
+            const filePath = bucketAndPath.substring(firstSlashIndex + 1);
+            
+            // Delete the file using the Admin client
+            await supabaseAdmin.storage.from(bucketName).remove([filePath]);
+          }
+        } catch (storageErr) {
+          console.error("Failed to delete ID image:", storageErr);
+        }
+      }
+
+      // STEP 1: Delete profile first using Admin client to bypass RLS
+      const { error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .delete()
+        .eq('id', user.id);
+        
+      if (profileError) throw profileError;
+
+      // STEP 2: Delete auth account
       const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(user.id);
       if (authError) throw authError;
 
@@ -294,6 +325,8 @@ export default function UserManagement() {
       toast({ title: "User Deleted", description: `${user.name} has been permanently removed.` });
     } catch (error: any) {
       toast({ title: "Delete Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -306,8 +339,36 @@ export default function UserManagement() {
 
     for (const id of idsToDelete) {
       try {
+        const userToDelete = users.find(u => u.id === id);
+
+        // --- NEW STEP: Delete storage file if it exists ---
+        if (userToDelete && userToDelete.id_attachment_url) {
+           try {
+             const urlParts = userToDelete.id_attachment_url.split('/public/');
+             if (urlParts.length === 2) {
+               const bucketAndPath = urlParts[1];
+               const firstSlashIndex = bucketAndPath.indexOf('/');
+               const bucketName = bucketAndPath.substring(0, firstSlashIndex);
+               const filePath = bucketAndPath.substring(firstSlashIndex + 1);
+               await supabaseAdmin.storage.from(bucketName).remove([filePath]);
+             }
+           } catch (err) {
+             console.error("Failed to delete storage file:", err);
+           }
+        }
+
+        // STEP 1: Delete profile first using Admin client to bypass RLS
+        const { error: profileError } = await supabaseAdmin
+          .from('profiles')
+          .delete()
+          .eq('id', id);
+          
+        if (profileError) throw profileError;
+
+        // STEP 2: Delete auth account
         const { error } = await supabaseAdmin.auth.admin.deleteUser(id);
         if (error) throw error;
+        
         successCount++;
       } catch (error) {
         console.error(`Failed to delete user ${id}:`, error);
@@ -401,7 +462,8 @@ export default function UserManagement() {
             role: role,
             contact_number: contact,
             ...(role === "doctor" && { clinic_code: getVal("clinic_code"), barangay: getVal("barangay"), license_number: getVal("license_number") }),
-            ...(role === "patient" && { risk_level: "Pending", verification_status: "Verified", barangay: getVal("barangay") })
+            // Fixed: Removed verification_status from bulk import as well
+            ...(role === "patient" && { risk_level: "Pending", barangay: getVal("barangay") })
           };
 
           const { error: profileError } = await supabaseAdmin.from('profiles').insert([profileData]);
