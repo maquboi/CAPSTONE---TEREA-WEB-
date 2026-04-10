@@ -159,8 +159,8 @@ export function PatientQueueTable({ search, riskFilter, statusFilter }: PatientQ
                               <Button size="icon" variant="outline" className="h-8 w-8 text-red-600" onClick={() => handleAction(item.id, profile?.full_name, 'declined')}><X className="h-4 w-4" /></Button>
                             </>
                           )}
-                          {/* ADDED: onClick event to trigger navigation */}
-                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => navigate(`/doctor/patient/${item.patient_id}`)}><Eye className="h-4 w-4" /></Button>
+                          {/* UPDATED: Route now points to /doctor/patient-details/ instead of /doctor/patient/ */}
+                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => navigate(`/doctor/patient-details/${item.patient_id}`)}><Eye className="h-4 w-4" /></Button>
                         </div>
                       </TableCell>
                     </TableRow>
