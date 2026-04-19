@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea"; // Added for memo
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -29,7 +30,9 @@ import {
   AlertCircle,
   Plus,
   Wand2,
-  Trash2
+  Trash2,
+  SendHorizontal,
+  Stethoscope
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -42,6 +45,7 @@ export default function PatientDetail() {
   const [saving, setSaving] = useState(false);
   const [prescribing, setPrescribing] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [postingMemo, setPostingMemo] = useState(false); // New state
   const [patient, setPatient] = useState<any>(null);
   
   const [meds, setMeds] = useState<any[]>([]);
@@ -50,6 +54,7 @@ export default function PatientDetail() {
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [memoText, setMemoText] = useState(""); // New state for Memo (Option 4)
 
   const [newMed, setNewMed] = useState({ name: "", dosage: "", time: "08:00", start: "", end: "" });
 
@@ -57,7 +62,6 @@ export default function PatientDetail() {
   const createAuditLog = async (action: string, category: string, target: string, metadata: any = {}, severity: string = 'info') => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      // We use the full_name from the current session or a default label
       const userName = user?.user_metadata?.full_name || "Doctor/Admin";
 
       await supabase.from('audit_logs').insert({
@@ -90,7 +94,6 @@ export default function PatientDetail() {
       if (profileErr) throw profileErr;
       setPatient(profile);
       
-      // LOG ACCESS: Every time the profile is successfully loaded/viewed
       createAuditLog(
         "Patient Record Viewed", 
         "Patient Access", 
@@ -155,13 +158,12 @@ export default function PatientDetail() {
 
       if (connError) throw connError;
 
-      // LOG ACTION: Treatment timeline change
       createAuditLog(
         "Treatment Timeline Updated", 
         "Patient Access", 
         patient?.full_name, 
         { start_date: startDate, end_date: endDate },
-        'warning' // Highlighting as a significant clinical change
+        'warning'
       );
 
       toast({ 
@@ -174,6 +176,30 @@ export default function PatientDetail() {
       toast({ variant: "destructive", title: "Sync Failed", description: err.message });
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Option 4 Implementation: Post Daily Memo to Patient's Med Diary
+  const handlePostMemo = async () => {
+    if (!memoText.trim()) return;
+    setPostingMemo(true);
+    try {
+      const { error } = await supabase.from('doctor_notes').insert({
+        user_id: id,
+        note_text: memoText,
+        category: 'Instruction', // Labeling as instruction for system clarity
+        is_checked: false
+      });
+
+      if (error) throw error;
+
+      toast({ title: "Memo Sent", description: "Instructions pushed to patient's diary." });
+      setMemoText("");
+      fetchData();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Failed to send memo", description: err.message });
+    } finally {
+      setPostingMemo(false);
     }
   };
 
@@ -203,7 +229,6 @@ export default function PatientDetail() {
       const { error } = await supabase.from('roadmap').insert(protocolMilestones);
       if (error) throw error;
 
-      // LOG ACTION: Protocol Generation
       createAuditLog(
         "TB Protocol Milestones Generated", 
         "Reports", 
@@ -249,7 +274,6 @@ export default function PatientDetail() {
 
       if (error) throw error;
       
-      // LOG ACTION: New Prescription
       createAuditLog(
         "New Medication Prescribed", 
         "Patient Access", 
@@ -273,13 +297,12 @@ export default function PatientDetail() {
       const { error } = await supabase.from('medications').delete().eq('id', medId);
       if (error) throw error;
 
-      // LOG ACTION: Remove Prescription
       createAuditLog(
         "Prescription Removed", 
         "Patient Access", 
         patient?.full_name, 
         { medication: medToDelete?.name || "Unknown" },
-        'danger' // Significant clinical removal
+        'danger'
       );
 
       toast({ title: "Prescription Removed" });
@@ -312,6 +335,8 @@ export default function PatientDetail() {
 
   let timeProgress = 0;
   let daysLeft = 0;
+  let phase = "Not Started"; // Option 5 logic
+  
   if (startDate && endDate) {
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -320,6 +345,9 @@ export default function PatientDetail() {
     const elapsed = Math.ceil((today.getTime() - start.getTime()) / (1000 * 3600 * 24));
     timeProgress = Math.min(Math.max((elapsed / totalDuration) * 100, 0), 100);
     daysLeft = Math.max(totalDuration - elapsed, 0);
+    
+    // Option 5: Treatment Phase Calculation
+    phase = elapsed <= 60 ? "Intensive Phase" : "Continuation Phase";
   }
 
   const isVerified = patient?.status === 'active';
@@ -341,6 +369,15 @@ export default function PatientDetail() {
                   <Label className="text-muted-foreground text-xs uppercase tracking-wider">Full Name</Label>
                   <p className="text-lg font-bold text-[#2D3B1E]">{patient?.full_name}</p>
                 </div>
+                {/* Option 5 UI: Current Phase Indicator */}
+                <div>
+                  <Label className="text-muted-foreground text-xs uppercase tracking-wider">Treatment Phase</Label>
+                  <div className="pt-1">
+                    <Badge variant="outline" className="bg-[#FEFAE0] text-[#606C38] border-[#DDE5B6] font-bold">
+                      {phase}
+                    </Badge>
+                  </div>
+                </div>
                 <div>
                   <Label className="text-muted-foreground text-xs uppercase tracking-wider">Account Status</Label>
                   <div className="pt-1">
@@ -356,14 +393,36 @@ export default function PatientDetail() {
               </CardContent>
             </Card>
 
+            {/* Option 4 UI: Post Daily Memo Card */}
+            <Card className="shadow-sm border-[#DDE5B6] border-l-4 border-l-blue-400">
+              <CardHeader><CardTitle className="flex items-center gap-2 text-sm text-[#2D3B1E]"><Stethoscope className="h-4 w-4 text-blue-500" /> Daily Protocol Memo</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <Textarea 
+                  placeholder="Type specific instructions for today's medication intake..." 
+                  className="text-xs resize-none bg-slate-50 border-slate-200 h-20"
+                  value={memoText}
+                  onChange={(e) => setMemoText(e.target.value)}
+                />
+                <Button 
+                  onClick={handlePostMemo} 
+                  disabled={postingMemo || !memoText.trim()}
+                  className="w-full bg-blue-500 hover:bg-blue-600 h-8 text-xs gap-2"
+                >
+                  {postingMemo ? <Loader2 className="h-3 w-3 animate-spin" /> : <SendHorizontal className="h-3 w-3" />}
+                  Push Memo to Diary
+                </Button>
+                <p className="text-[10px] text-muted-foreground italic">Instructions appear as a high-priority card on the patient's Meds Page.</p>
+              </CardContent>
+            </Card>
+
             <Card className="shadow-sm border-[#DDE5B6]">
               <CardHeader><CardTitle className="flex items-center gap-2 text-sm text-[#2D3B1E]"><MessageSquare className="h-4 w-4 text-[#606C38]" /> Patient Reports</CardTitle></CardHeader>
               <CardContent>
-                {notes.filter(n => !n.is_checked).length === 0 ? (
+                {notes.filter(n => !n.is_checked && n.category !== 'Instruction').length === 0 ? (
                   <p className="text-sm text-muted-foreground italic">No reported concerns.</p>
                 ) : (
                   <div className="space-y-3">
-                    {notes.filter(n => !n.is_checked).map(note => (
+                    {notes.filter(n => !n.is_checked && n.category !== 'Instruction').map(note => (
                       <div key={note.id} className="p-3 border border-[#DDE5B6] rounded-lg bg-[#FEFAE0]/30">
                         <div className="flex justify-between items-start mb-1">
                           <Badge variant="outline" className="text-[10px] bg-white text-[#606C38] border-[#DDE5B6]">{note.category}</Badge>
@@ -527,4 +586,4 @@ export default function PatientDetail() {
       </div>
     </DashboardLayout>
   );
-} 
+}   
