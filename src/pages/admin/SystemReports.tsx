@@ -4,7 +4,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Download, FileText, Calendar as CalendarIcon, Search, ArrowUpDown, Loader2, Settings2, X, ChevronDown } from "lucide-react";
+import { Download, FileText, Calendar as CalendarIcon, Search, ArrowUpDown, Loader2, Settings2, X, ChevronDown, CheckCircle, AlertCircle } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -12,7 +12,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMe
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, LineChart, Line, Legend
@@ -32,7 +31,11 @@ const reports = [
 const COLORS = ['#606C38', '#DDA15E', '#BC6C25', '#283618', '#ef4444', '#f59e0b', '#10b981'];
 
 export default function SystemReports() {
-  const { toast } = useToast();
+  // Custom Alert State
+  const [alert, setAlert] = useState({ open: false, title: "", message: "", type: "success" as "success" | "error" });
+  const triggerAlert = (title: string, message: string, type: "success" | "error" = "success") => {
+    setAlert({ open: true, title, message, type });
+  };
   
   // Filtering & Sorting State
   const [startDate, setStartDate] = useState<Date | undefined>();
@@ -146,13 +149,13 @@ export default function SystemReports() {
         });
 
       } catch (error) {
-        toast({ title: "Fetch Error", description: "Failed to load live report data.", variant: "destructive" });
+        triggerAlert("Fetch Error", "Failed to load live report data.", "error");
       } finally {
         setIsFetching(false);
       }
     }
     fetchReportData();
-  }, [startDate, endDate, toast]);
+  }, [startDate, endDate]);
 
   const handleChartClick = (reportType: string, payload: any) => {
     if (!payload || !payload.activePayload || !payload.activePayload[0]) return;
@@ -190,7 +193,9 @@ export default function SystemReports() {
   const handleExportCSV = (type: string, name: string) => {
     let csvContent = "data:text/csv;charset=utf-8,";
     const dataObj = chartData[type];
-    if (!dataObj || dataObj.length === 0) return toast({ title: "Empty", description: "No data to export.", variant: "destructive" });
+    if (!dataObj || dataObj.length === 0) {
+      return triggerAlert("Empty", "No data to export.", "error");
+    }
     const headers = Object.keys(dataObj[0]).join(",");
     csvContent += headers + "\n";
     dataObj.forEach((row: any) => { csvContent += Object.values(row).join(",") + "\n"; });
@@ -201,13 +206,13 @@ export default function SystemReports() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast({ title: "Export Successful", description: "CSV downloaded." });
+    triggerAlert("Export Successful", "CSV downloaded.", "success");
   };
 
   const handleExportPDF = async (type: string, name: string) => {
     const chartElement = document.getElementById(`chart-${type}`);
     if (!chartElement) return;
-    toast({ title: "Generating PDF", description: "Rendering document..." });
+    triggerAlert("Generating PDF", "Rendering document...", "success");
     try {
       const canvas = await html2canvas(chartElement, { scale: 2 });
       const imgData = canvas.toDataURL('image/png');
@@ -222,7 +227,9 @@ export default function SystemReports() {
       const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
       pdf.addImage(imgData, 'PNG', 20, 60, pdfWidth, pdfHeight);
       pdf.save(`TEREA_${name}.pdf`);
-    } catch (e) { toast({ title: "Error", description: "PDF generation failed." }); }
+    } catch (e) { 
+      triggerAlert("Error", "PDF generation failed.", "error"); 
+    }
   };
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -312,6 +319,19 @@ export default function SystemReports() {
 
   return (
     <DashboardLayout role="admin" userName="Admin User">
+
+      {/* Centralized Notification Pop-up */}
+      <Dialog open={alert.open} onOpenChange={(open) => setAlert({...alert, open})}>
+        <DialogContent className="sm:max-w-[400px] rounded-2xl p-6 text-center animate-in fade-in zoom-in-95 duration-200 bg-white border-slate-200 shadow-xl font-sans">
+          <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${alert.type === 'success' ? 'bg-green-100' : 'bg-red-100'}`}>
+            {alert.type === 'success' ? <CheckCircle className="h-6 w-6 text-green-600" /> : <AlertCircle className="h-6 w-6 text-red-600" />}
+          </div>
+          <h2 className="text-lg font-bold text-slate-900">{alert.title}</h2>
+          <p className="text-slate-500 mt-2 text-sm">{alert.message}</p>
+          <Button className="mt-6 w-full rounded-xl bg-[#606C38] hover:bg-[#2D3B1E] text-white" onClick={() => setAlert({...alert, open: false})}>Okay</Button>
+        </DialogContent>
+      </Dialog>
+
       <div className="space-y-6 animate-fade-in font-sans pb-10">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>

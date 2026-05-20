@@ -11,6 +11,7 @@ import {
   FileText,
   AlertTriangle,
   UserCircle,
+  Headset,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -50,6 +51,7 @@ const adminNavSections: NavSection[] = [
       { title: "System Reports", href: "/admin/reports", icon: FileText },
       { title: "Audit Logs", href: "/admin/audit-logs", icon: ClipboardList },
       { title: "Error Logs", href: "/admin/error-logs", icon: AlertTriangle },
+      { title: "Support Feedbacks", href: "/admin/support-tickets", icon: Headset },
     ],
   },
 ];

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Building2, Eye, EyeOff, Loader2, ShieldCheck, Stethoscope } from "lucide-react";
+import { ArrowLeft, Building2, Eye, EyeOff, Loader2, ShieldCheck, Stethoscope, CheckCircle2, X, Headset } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +21,16 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  
+  const [isSuccess, setIsSuccess] = useState(false);
+
+  // Support Modal States
+  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
+  const [supportType, setSupportType] = useState<string>("");
+  const [supportEmail, setSupportEmail] = useState("");
+  const [supportMessage, setSupportMessage] = useState("");
+  const [supportStatus, setSupportStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [supportError, setSupportError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +44,6 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      // 1. REAL LOGIN: Check credentials with Supabase
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -46,7 +55,6 @@ export default function Login() {
 
       if (!authData.user) throw new Error("User not found");
 
-      // 2. VERIFY ROLE: Check the 'profiles' table for the actual role
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('role')
@@ -57,26 +65,70 @@ export default function Login() {
         throw new Error("Profile not found. Contact IT support.");
       }
 
-      // 3. SECURITY CHECK: Ensure the selected role matches the database role
       if (profile.role !== role) {
         throw new Error(`This account is not registered as a ${role}.`);
       }
 
-      // 4. SUCCESS: Navigate to the correct dashboard
-      if (profile.role === "admin") {
-        navigate("/admin/dashboard");
-      } else if (profile.role === "doctor") {
-        navigate("/doctor/dashboard");
-      } else {
-        setError("Unauthorized access.");
-      }
+      setIsSuccess(true);
+      
+      setTimeout(() => {
+        if (profile.role === "admin") {
+          navigate("/admin/dashboard");
+        } else if (profile.role === "doctor") {
+          navigate("/doctor/dashboard");
+        } else {
+          setError("Unauthorized access.");
+          setIsSuccess(false);
+        }
+      }, 5000);
 
     } catch (err: any) {
       setError(err.message || "Failed to sign in");
       await supabase.auth.signOut();
-    } finally {
-      setIsLoading(false);
+      setIsLoading(false); 
     }
+  };
+
+  const handleSupportSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSupportStatus("loading");
+    setSupportError("");
+
+    if (!supportEmail || !supportType || !supportMessage) {
+      setSupportError("Please fill in all fields.");
+      setSupportStatus("error");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('support_tickets')
+        .insert([{ 
+          email: supportEmail, 
+          issue_type: supportType, 
+          message: supportMessage 
+        }]);
+
+      if (error) throw error;
+
+      setSupportStatus("success");
+      setTimeout(() => {
+        setIsSupportModalOpen(false);
+        setSupportStatus("idle");
+        setSupportEmail("");
+        setSupportMessage("");
+        setSupportType("");
+      }, 4000);
+    } catch (err: any) {
+      setSupportError(err.message || "Failed to send request.");
+      setSupportStatus("error");
+    }
+  };
+
+  const openSupportModal = (defaultType: string) => {
+    setSupportType(defaultType);
+    setIsSupportModalOpen(true);
+    setSupportStatus("idle");
   };
 
   return (
@@ -204,6 +256,7 @@ export default function Login() {
                 <Label htmlFor="password" className="text-xs font-bold uppercase tracking-wide text-[#2D3B1E]">Password</Label>
                 <button
                   type="button"
+                  onClick={() => openSupportModal("Password Reset Request")}
                   className="text-xs font-semibold text-[#606C38] transition-colors hover:text-[#2D3B1E]"
                 >
                   Forgot password?
@@ -235,13 +288,15 @@ export default function Login() {
             <Button
               type="submit"
               className="btn-premium mt-6 h-12 w-full rounded-xl bg-[#606C38] text-sm font-bold text-white shadow-sm hover:bg-[#4A5529]"
-              disabled={isLoading}
+              disabled={isLoading || isSuccess}
             >
-              {isLoading ? (
+              {isLoading && !isSuccess ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                   Authenticating...
                 </>
+              ) : isSuccess ? (
+                "Success!"
               ) : (
                 "Sign In"
               )}
@@ -251,10 +306,141 @@ export default function Login() {
           <div className="border-t border-[#606C38]/15 pt-5 text-center">
             <p className="text-sm text-slate-500">
               Need access?{" "}
-              <button className="font-semibold text-[#606C38] transition-colors hover:text-[#2D3B1E]">
+              <button 
+                type="button"
+                onClick={() => openSupportModal("General IT Support")}
+                className="font-semibold text-[#606C38] transition-colors hover:text-[#2D3B1E]"
+              >
                 Contact IT Support
               </button>
             </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Centered Success Overlay Notification */}
+      <div 
+        className={`fixed inset-0 z-[100] flex items-center justify-center bg-white/40 backdrop-blur-sm transition-all duration-500 ease-out ${
+          isSuccess ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"
+        }`}
+      >
+        <div 
+          className={`flex flex-col items-center gap-4 rounded-3xl border border-[#606C38]/10 bg-white p-10 text-center shadow-[0_20px_60px_rgba(45,59,30,0.15)] transition-all duration-700 ease-out ${
+            isSuccess ? "scale-100 translate-y-0" : "scale-90 translate-y-8"
+          }`}
+        >
+          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#DDE5B6]/40">
+            <CheckCircle2 className="h-10 w-10 text-[#606C38]" />
+          </div>
+          <div>
+            <h3 className="text-2xl font-extrabold text-[#2D3B1E]">Login Successful</h3>
+            <p className="mt-2 text-sm font-medium text-slate-500">
+              Securely redirecting to your portal...
+            </p>
+          </div>
+          
+          <div className="mt-4 flex gap-1.5">
+            <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-[#606C38]" style={{ animationDelay: "0ms" }}></span>
+            <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-[#606C38]" style={{ animationDelay: "150ms" }}></span>
+            <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-[#606C38]" style={{ animationDelay: "300ms" }}></span>
+          </div>
+        </div>
+      </div>
+
+      {/* IT Support / Password Reset Modal */}
+      <div 
+        className={`fixed inset-0 z-[110] flex items-center justify-center bg-black/30 backdrop-blur-sm transition-all duration-300 ${
+          isSupportModalOpen ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"
+        }`}
+      >
+        <div 
+          className={`w-full max-w-md bg-white rounded-3xl shadow-xl transition-all duration-500 ease-out ${
+            isSupportModalOpen ? "scale-100 translate-y-0" : "scale-95 translate-y-4"
+          }`}
+        >
+          <div className="flex items-center justify-between border-b border-slate-100 p-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#DDE5B6]/30">
+                <Headset className="h-5 w-5 text-[#606C38]" />
+              </div>
+              <h3 className="text-lg font-bold text-[#2D3B1E]">IT Support Desk</h3>
+            </div>
+            <button 
+              onClick={() => setIsSupportModalOpen(false)}
+              className="text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="p-6">
+            {supportStatus === "success" ? (
+              <div className="py-8 text-center space-y-4 animate-fade-in">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-50">
+                  <CheckCircle2 className="h-8 w-8 text-green-600" />
+                </div>
+                <div>
+                  <h4 className="text-xl font-bold text-[#2D3B1E]">Ticket Submitted</h4>
+                  <p className="mt-2 text-sm text-slate-500">
+                    Your request has been sent to the system administrator. Please wait for an email with further instructions.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleSupportSubmit} className="space-y-5">
+                {supportError && (
+                  <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 border border-red-100">
+                    {supportError}
+                  </div>
+                )}
+                
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase tracking-wide text-[#2D3B1E]">Issue Type</Label>
+                  <Select value={supportType} onValueChange={setSupportType}>
+                    <SelectTrigger className="h-11 rounded-xl bg-slate-50 border-slate-200">
+                      <SelectValue placeholder="Select issue type" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-slate-200">
+                      <SelectItem value="Password Reset Request">Password Reset Request</SelectItem>
+                      <SelectItem value="Account Locked">Account Locked</SelectItem>
+                      <SelectItem value="System Bug">System Bug / Glitch</SelectItem>
+                      <SelectItem value="General IT Support">General IT Support</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase tracking-wide text-[#2D3B1E]">Your Email</Label>
+                  <Input
+                    type="email"
+                    placeholder="name@carmona.gov.ph"
+                    value={supportEmail}
+                    onChange={(e) => setSupportEmail(e.target.value)}
+                    className="h-11 rounded-xl bg-slate-50 border-slate-200 focus-visible:border-[#606C38] focus-visible:ring-[#606C38]"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase tracking-wide text-[#2D3B1E]">Message / Details</Label>
+                  <textarea
+                    placeholder="Please describe the issue..."
+                    value={supportMessage}
+                    onChange={(e) => setSupportMessage(e.target.value)}
+                    className="w-full min-h-[100px] rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#606C38] focus:border-transparent transition-all resize-none"
+                  />
+                </div>
+
+                <Button 
+                  type="submit" 
+                  disabled={supportStatus === "loading"}
+                  className="w-full h-11 rounded-xl bg-[#606C38] hover:bg-[#4A5529] font-bold text-white transition-colors"
+                >
+                  {supportStatus === "loading" ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>
+                  ) : "Send Support Request"}
+                </Button>
+              </form>
+            )}
           </div>
         </div>
       </div>

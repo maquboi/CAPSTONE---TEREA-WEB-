@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "../../lib/supabase";
-import { createClient } from "@supabase/supabase-js"; // Needed for the Admin Client
+import { createClient } from "@supabase/supabase-js"; 
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Search, MoreHorizontal, FileDown, ArrowUpDown, ChevronLeft, ChevronRight, Filter, Trash2, Eye, CheckCircle, XCircle, Upload, Users, Activity, ShieldAlert, Building, FileSpreadsheet } from "lucide-react";
+import { Plus, Search, MoreHorizontal, FileDown, ArrowUpDown, ChevronLeft, ChevronRight, Filter, Trash2, Eye, CheckCircle, XCircle, Upload, Users, Activity, ShieldAlert, Building, FileSpreadsheet, AlertCircle } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,10 +32,9 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
 import jsPDF from "jspdf";
+import { useLanguage } from "./LanguageContext";
 
-// Initialize Supabase Admin Client for user creation without logging out the Admin
 const supabaseAdmin = createClient(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY
@@ -57,8 +56,15 @@ interface User {
   id_attachment_url?: string;
 }
 
+const generateClinicCode = () => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const letters = Array.from({ length: 3 }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join('');
+  const digits = Math.floor(100 + Math.random() * 900);
+  return `${letters}-${digits}`;
+};
+
 export default function UserManagement() {
-  const { toast } = useToast();
+  const { t } = useLanguage();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [users, setUsers] = useState<User[]>([]);
@@ -67,7 +73,11 @@ export default function UserManagement() {
   const [activeTab, setActiveTab] = useState<"doctors" | "patients">("doctors");
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Dialog States
+  const [alert, setAlert] = useState({ open: false, title: "", message: "", type: "success" as "success" | "error" });
+  const triggerAlert = (title: string, message: string, type: "success" | "error" = "success") => {
+    setAlert({ open: true, title, message, type });
+  };
+
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
@@ -78,15 +88,12 @@ export default function UserManagement() {
   const [reviewUser, setReviewUser] = useState<User | null>(null);
   const [proofUrl, setProofUrl] = useState<string | null>(null);
   
-  // Selection State
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
 
-  // Master New User State
   const [newUser, setNewUser] = useState({ 
     name: "", email: "", contact: "", barangay: "", clinic_code: "", license_number: "", age: "", gender: "" 
   });
 
-  // Sorting, Filtering, and Pagination State
   const [sortConfig, setSortConfig] = useState<{ key: keyof User; direction: 'asc' | 'desc' }>({ key: 'name', direction: 'asc' });
   const [riskFilter, setRiskFilter] = useState<"All" | "High" | "Medium" | "Low">("All");
   const [currentPage, setCurrentPage] = useState(1);
@@ -140,7 +147,7 @@ export default function UserManagement() {
         setUsers(mappedUsers);
       }
     } catch (error: any) {
-      toast({ title: "Error fetching users", description: error.message, variant: "destructive" });
+      triggerAlert(t("error") || "Error", error.message, "error");
     } finally {
       setLoading(false);
     }
@@ -178,7 +185,6 @@ export default function UserManagement() {
   const totalPages = Math.ceil(processedData.length / itemsPerPage);
   const paginatedUsers = processedData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  // Stats Calculations
   const stats = useMemo(() => {
     return {
       totalDoctors: users.filter(u => u.role === 'doctor').length,
@@ -193,7 +199,6 @@ export default function UserManagement() {
     setSortConfig({ key, direction });
   };
 
-  // Selection Logic
   const toggleUserSelection = (userId: string) => {
     const newSelected = new Set(selectedUserIds);
     if (newSelected.has(userId)) {
@@ -214,14 +219,13 @@ export default function UserManagement() {
     }
   };
 
-  // Add User Logic
   const handleAddUser = async () => {
     if (!newUser.name || !newUser.email || !newUser.contact) {
-      toast({ title: "Validation Error", description: "Name, Email, and Contact are required.", variant: "destructive" });
+      triggerAlert(t("error"), "Name, Email, and Contact are required.", "error");
       return;
     }
     if (activeTab === "patients" && (!newUser.age || !newUser.gender)) {
-      toast({ title: "Validation Error", description: "Age and Gender are required for patients.", variant: "destructive" });
+      triggerAlert(t("error"), "Age and Gender are required for patients.", "error");
       return;
     }
 
@@ -236,7 +240,12 @@ export default function UserManagement() {
         email_confirm: true,
       });
 
-      if (authError) throw new Error(authError.message);
+      if (authError) {
+        if (authError.message.includes("already registered") || authError.message.includes("User already exists")) {
+            throw new Error("This email is already registered. Please use a unique email.");
+        }
+        throw new Error(authError.message);
+      }
       if (!authData.user) throw new Error("User creation failed, no data returned.");
 
       const profileData = {
@@ -245,8 +254,11 @@ export default function UserManagement() {
         email: newUser.email,
         role: userRole,
         contact_number: newUser.contact,
-        ...(userRole === "doctor" && { clinic_code: newUser.clinic_code, barangay: newUser.barangay, license_number: newUser.license_number }),
-        // Fixed: Removed verification_status from patient creation
+        ...(userRole === "doctor" && { 
+            clinic_code: newUser.clinic_code || generateClinicCode(), 
+            barangay: newUser.barangay, 
+            license_number: newUser.license_number 
+        }),
         ...(userRole === "patient" && { age: parseInt(newUser.age), gender: newUser.gender, risk_level: "Pending" })
       };
 
@@ -254,13 +266,13 @@ export default function UserManagement() {
 
       if (profileError) throw new Error(profileError.message);
 
-      toast({ title: "Success", description: `${userRole === 'doctor' ? 'Doctor' : 'Patient'} account created successfully.` });
+      triggerAlert("Success", `${userRole === 'doctor' ? 'Doctor' : 'Patient'} account created successfully.`);
       setAddDialogOpen(false);
       setNewUser({ name: "", email: "", contact: "", barangay: "", clinic_code: "", license_number: "", age: "", gender: "" });
       fetchUsers(); 
 
     } catch (error: any) {
-      toast({ title: "Creation Failed", description: error.message, variant: "destructive" });
+      triggerAlert(t("error"), error.message, "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -280,9 +292,9 @@ export default function UserManagement() {
       if (error) throw error;
       setUsers(users.map((u) => (u.id === editingUser.id ? editingUser : u)));
       setEditDialogOpen(false);
-      toast({ title: "User updated", description: `${editingUser.name} has been updated in the database.` });
+      triggerAlert("User updated", `${editingUser.name} has been updated in the database.`);
     } catch (error: any) {
-      toast({ title: "Update Failed", description: error.message, variant: "destructive" });
+      triggerAlert(t("error"), error.message, "error");
     }
   };
 
@@ -290,10 +302,8 @@ export default function UserManagement() {
     try {
       setIsSubmitting(true);
 
-      // --- NEW STEP: Delete the ID image from Storage First ---
       if (user.id_attachment_url) {
         try {
-          // Automatically extract the bucket name and file path from the public URL
           const urlParts = user.id_attachment_url.split('/public/');
           if (urlParts.length === 2) {
             const bucketAndPath = urlParts[1];
@@ -301,7 +311,6 @@ export default function UserManagement() {
             const bucketName = bucketAndPath.substring(0, firstSlashIndex);
             const filePath = bucketAndPath.substring(firstSlashIndex + 1);
             
-            // Delete the file using the Admin client
             await supabaseAdmin.storage.from(bucketName).remove([filePath]);
           }
         } catch (storageErr) {
@@ -309,7 +318,6 @@ export default function UserManagement() {
         }
       }
 
-      // STEP 1: Delete profile first using Admin client to bypass RLS
       const { error: profileError } = await supabaseAdmin
         .from('profiles')
         .delete()
@@ -317,14 +325,13 @@ export default function UserManagement() {
         
       if (profileError) throw profileError;
 
-      // STEP 2: Delete auth account
       const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(user.id);
       if (authError) throw authError;
 
       setUsers(users.filter((u) => u.id !== user.id));
-      toast({ title: "User Deleted", description: `${user.name} has been permanently removed.` });
+      triggerAlert(t("deleteUser"), `${user.name} has been permanently removed.`);
     } catch (error: any) {
-      toast({ title: "Delete Failed", description: error.message, variant: "destructive" });
+      triggerAlert(t("error"), error.message, "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -341,7 +348,6 @@ export default function UserManagement() {
       try {
         const userToDelete = users.find(u => u.id === id);
 
-        // --- NEW STEP: Delete storage file if it exists ---
         if (userToDelete && userToDelete.id_attachment_url) {
            try {
              const urlParts = userToDelete.id_attachment_url.split('/public/');
@@ -357,7 +363,6 @@ export default function UserManagement() {
            }
         }
 
-        // STEP 1: Delete profile first using Admin client to bypass RLS
         const { error: profileError } = await supabaseAdmin
           .from('profiles')
           .delete()
@@ -365,7 +370,6 @@ export default function UserManagement() {
           
         if (profileError) throw profileError;
 
-        // STEP 2: Delete auth account
         const { error } = await supabaseAdmin.auth.admin.deleteUser(id);
         if (error) throw error;
         
@@ -382,14 +386,14 @@ export default function UserManagement() {
     setIsSubmitting(false);
 
     if (failCount === 0) {
-      toast({ title: "Bulk Delete Successful", description: `Successfully deleted ${successCount} users.` });
+      triggerAlert("Bulk Delete Successful", `Successfully deleted ${successCount} users.`);
     } else {
-      toast({ title: "Partial Deletion", description: `Deleted ${successCount} users. Failed to delete ${failCount} users.`, variant: "destructive" });
+      triggerAlert("Partial Deletion", `Deleted ${successCount} users. Failed to delete ${failCount} users.`, "error");
     }
   };
 
   const handleResetPassword = (user: User) => {
-    toast({ title: "Password reset", description: `Password reset link logic pending for ${user.email}.` });
+    triggerAlert(t("resetPassword"), `Password reset link logic pending for ${user.email}.`);
   };
 
   const handleReviewID = async (user: User) => {
@@ -402,7 +406,6 @@ export default function UserManagement() {
     setVerifyDialogOpen(true);
   };
 
-  // Bulk CSV Import Logic
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -413,7 +416,6 @@ export default function UserManagement() {
     reader.onload = async (e) => {
       try {
         const text = e.target?.result as string;
-        // Basic CSV parsing
         const rows = text.split('\n').map(row => row.split(',').map(cell => cell.trim()));
         const headers = rows.shift()?.map(h => h.toLowerCase());
 
@@ -421,10 +423,10 @@ export default function UserManagement() {
 
         let success = 0;
         let failed = 0;
-        toast({ title: "Importing Data", description: "Please wait while we process the CSV...", duration: 5000 });
+        triggerAlert("Importing Data", "Please wait while we process the CSV...", "success");
 
         for (const row of rows) {
-          if (row.length < 2 || !row[0]) continue; // Skip empty rows
+          if (row.length < 2 || !row[0]) continue; 
 
           const getVal = (colName: string) => {
             const idx = headers.indexOf(colName);
@@ -434,7 +436,7 @@ export default function UserManagement() {
           const name = getVal("name") || getVal("full name");
           const email = getVal("email");
           const contact = getVal("contact") || getVal("phone");
-          const roleInput = getVal("role")?.toLowerCase() || activeTab; // Use active tab if role column is missing
+          const roleInput = getVal("role")?.toLowerCase() || activeTab; 
           const role = roleInput === "doctor" ? "doctor" : "patient";
           
           if (!name || !email) {
@@ -442,7 +444,6 @@ export default function UserManagement() {
             continue;
           }
 
-          // 1. Create Auth User
           const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
             email: email,
             password: "TemporaryPassword123!",
@@ -454,15 +455,13 @@ export default function UserManagement() {
             continue;
           }
 
-          // 2. Insert Profile
           const profileData = {
             id: authData.user.id,
             full_name: name,
             email: email,
             role: role,
             contact_number: contact,
-            ...(role === "doctor" && { clinic_code: getVal("clinic_code"), barangay: getVal("barangay"), license_number: getVal("license_number") }),
-            // Fixed: Removed verification_status from bulk import as well
+            ...(role === "doctor" && { clinic_code: getVal("clinic_code") || generateClinicCode(), barangay: getVal("barangay"), license_number: getVal("license_number") }),
             ...(role === "patient" && { risk_level: "Pending", barangay: getVal("barangay") })
           };
 
@@ -471,14 +470,14 @@ export default function UserManagement() {
           if (profileError) failed++; else success++;
         }
 
-        toast({ 
-          title: "Import Complete", 
-          description: `Successfully imported ${success} users. ${failed > 0 ? `Failed to import ${failed} rows.` : ''}`,
-          variant: failed > 0 ? "destructive" : "default"
-        });
+        triggerAlert(
+          "Import Complete", 
+          `Successfully imported ${success} users. ${failed > 0 ? `Failed to import ${failed} rows.` : ''}`,
+          failed > 0 ? "error" : "success"
+        );
         fetchUsers();
       } catch (err: any) {
-        toast({ title: "Import Error", description: err.message, variant: "destructive" });
+        triggerAlert(t("error"), err.message, "error");
       } finally {
         setIsSubmitting(false);
         if (fileInputRef.current) fileInputRef.current.value = "";
@@ -487,10 +486,9 @@ export default function UserManagement() {
     reader.readAsText(file);
   };
 
-  // PDF Export Logic
   const handleExportPDF = () => {
     if (processedData.length === 0) {
-      toast({ title: "Export Failed", description: "No data available to export.", variant: "destructive" });
+      triggerAlert(t("error"), "No data available to export.", "error");
       return;
     }
 
@@ -532,14 +530,13 @@ export default function UserManagement() {
 
     const safeDate = new Date().toLocaleDateString().replace(/\//g, '-');
     doc.save(`TEREA_${activeTab}_Registry_${safeDate}.pdf`);
-    toast({ title: "Export Successful", description: "Your PDF has been generated." });
+    triggerAlert("Export Successful", "Your PDF has been generated.");
     setExportDialogOpen(false);
   };
 
-  // ITIS-Compatible CSV Export Logic
   const handleExportCSV = () => {
     if (processedData.length === 0) {
-      toast({ title: "Export Failed", description: "No data available to export.", variant: "destructive" });
+      triggerAlert(t("error"), "No data available to export.", "error");
       return;
     }
 
@@ -547,7 +544,6 @@ export default function UserManagement() {
     if (activeTab === "doctors") {
       headers = ["ID", "Full_Name", "Email", "Contact_No", "Clinic_Code", "License_Number"];
     } else {
-      // ITIS Benchmark Headers
       headers = ["ITIS_ID", "Full_Name", "Email", "Age", "Sex", "Contact_No", "Address_Barangay", "Risk_Classification", "Verification_Status"];
     }
 
@@ -576,7 +572,7 @@ export default function UserManagement() {
     link.click();
     document.body.removeChild(link);
 
-    toast({ title: "Export Successful", description: `Your CSV has been securely generated.` });
+    triggerAlert("Export Successful", "Your CSV has been securely generated.");
     setExportDialogOpen(false);
   };
 
@@ -594,13 +590,26 @@ export default function UserManagement() {
 
   return (
     <DashboardLayout role="admin" userName="Admin User">
+      
+      {/* Centralized Notification Pop-up */}
+      <Dialog open={alert.open} onOpenChange={(open) => setAlert({...alert, open})}>
+        <DialogContent className="sm:max-w-[400px] rounded-2xl p-6 text-center animate-in fade-in zoom-in-95 duration-200 bg-white border-slate-200 shadow-xl font-sans">
+          <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${alert.type === 'success' ? 'bg-green-100' : 'bg-red-100'}`}>
+            {alert.type === 'success' ? <CheckCircle className="h-6 w-6 text-green-600" /> : <AlertCircle className="h-6 w-6 text-red-600" />}
+          </div>
+          <h2 className="text-lg font-bold text-slate-900">{alert.title}</h2>
+          <p className="text-slate-500 mt-2 text-sm">{alert.message}</p>
+          <Button className="mt-6 w-full rounded-xl bg-[#606C38] hover:bg-[#2D3B1E] text-white" onClick={() => setAlert({...alert, open: false})}>{t("okay")}</Button>
+        </DialogContent>
+      </Dialog>
+
       <div className="space-y-6 animate-fade-in font-sans">
         
         {/* Header Section */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">User Management</h1>
-            <p className="text-sm text-slate-500">Manage healthcare staff and patient registry</p>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t("userMgmtTitle")}</h1>
+            <p className="text-sm text-slate-500">{t("userMgmtSubtitle")}</p>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             {selectedUserIds.size > 0 && (
@@ -610,11 +619,10 @@ export default function UserManagement() {
                 onClick={() => setBulkDeleteDialogOpen(true)}
               >
                 <Trash2 className="mr-2 h-4 w-4" /> 
-                Delete Selected ({selectedUserIds.size})
+                {t("deleteSelected")} ({selectedUserIds.size})
               </Button>
             )}
             
-            {/* Hidden Input for CSV Import */}
             <input 
               type="file" 
               accept=".csv" 
@@ -629,7 +637,7 @@ export default function UserManagement() {
               onClick={() => fileInputRef.current?.click()}
               disabled={isSubmitting}
             >
-              <Upload className="mr-2 h-4 w-4" /> Import CSV
+              <Upload className="mr-2 h-4 w-4" /> {t("importCsv")}
             </Button>
             
             <Button 
@@ -637,10 +645,10 @@ export default function UserManagement() {
               className="rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50"
               onClick={() => setExportDialogOpen(true)}
             >
-              <FileDown className="mr-2 h-4 w-4" /> Export
+              <FileDown className="mr-2 h-4 w-4" /> {t("export")}
             </Button>
             <Button onClick={() => setAddDialogOpen(true)} className="rounded-xl bg-[#606C38] hover:bg-[#2D3B1E] text-white">
-              <Plus className="mr-2 h-4 w-4" /> Add {activeTab === 'doctors' ? 'Doctor' : 'Patient'}
+              <Plus className="mr-2 h-4 w-4" /> {activeTab === 'doctors' ? t("addDoctor") : t("addPatient")}
             </Button>
           </div>
         </div>
@@ -659,7 +667,7 @@ export default function UserManagement() {
               <Users className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-sm text-slate-500 font-medium">Total Doctors</p>
+              <p className="text-sm text-slate-500 font-medium">{t("totalDoctorsTitle")}</p>
               <h3 className="text-2xl font-bold text-slate-900">{stats.totalDoctors}</h3>
             </div>
           </div>
@@ -676,7 +684,7 @@ export default function UserManagement() {
               <Activity className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-sm text-slate-500 font-medium">Pending Verifications</p>
+              <p className="text-sm text-slate-500 font-medium">{t("pendingVerificationsTitle")}</p>
               <h3 className="text-2xl font-bold text-slate-900">{stats.pendingVerifications}</h3>
             </div>
           </div>
@@ -693,7 +701,7 @@ export default function UserManagement() {
               <ShieldAlert className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-sm text-slate-500 font-medium">High Risk Patients</p>
+              <p className="text-sm text-slate-500 font-medium">{t("highRiskPatientsTitle")}</p>
               <h3 className="text-2xl font-bold text-slate-900">{stats.highRiskPatients}</h3>
             </div>
           </div>
@@ -707,7 +715,7 @@ export default function UserManagement() {
               activeTab === "doctors" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-900"
             }`}
           >
-            Doctors & Staff
+            {t("doctorsAndStaffTab")}
           </button>
           <button
             onClick={() => setActiveTab("patients")}
@@ -715,7 +723,7 @@ export default function UserManagement() {
               activeTab === "patients" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-900"
             }`}
           >
-            Patients
+            {t("patientsTab")}
           </button>
         </div>
 
@@ -723,18 +731,14 @@ export default function UserManagement() {
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
-            placeholder={`Search ${activeTab}...`}
+            placeholder={activeTab === "doctors" ? t("searchDoctors") : t("searchPatients")}
             value={search}
             onChange={(e) => {
               const val = e.target.value;
               if (activeTab === "patients") {
                 const sanitized = val.replace(/[0-9]/g, "");
                 if (val !== sanitized) {
-                  toast({ 
-                    title: "Invalid Input", 
-                    description: "Numbers are not allowed when searching patients.", 
-                    className: "bg-white text-slate-900 font-sans shadow-lg rounded-xl border border-slate-200" 
-                  });
+                  triggerAlert("Invalid Input", "Numbers are not allowed when searching patients.", "error");
                 }
                 setSearch(sanitized);
               } else {
@@ -758,35 +762,35 @@ export default function UserManagement() {
                     className="data-[state=checked]:bg-[#606C38] data-[state=checked]:border-[#606C38]"
                   />
                 </TableHead>
-                <SortableHeader label="Name" sortKey="name" />
-                <TableHead className="font-semibold text-slate-800">Contact</TableHead>
+                <SortableHeader label={t("nameCol")} sortKey="name" />
+                <TableHead className="font-semibold text-slate-800">{t("contactCol")}</TableHead>
                 {activeTab === "doctors" ? (
                   <>
-                    <SortableHeader label="Clinic Code" sortKey="clinic_code" />
-                    <SortableHeader label="License No." sortKey="license_number" />
+                    <SortableHeader label={t("clinicCodeCol")} sortKey="clinic_code" />
+                    <SortableHeader label={t("licenseNoCol")} sortKey="license_number" />
                   </>
                 ) : (
                   <>
-                    <TableHead className="font-semibold text-slate-800">Verification</TableHead>
+                    <TableHead className="font-semibold text-slate-800">{t("verificationCol")}</TableHead>
                     <TableHead className="font-semibold text-slate-800 p-0">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <div className="flex items-center gap-1 cursor-pointer hover:bg-slate-100 transition-colors px-4 py-3 h-full w-full">
-                            {riskFilter === "All" ? "Risk Level" : `Risk: ${riskFilter}`}
+                            {riskFilter === "All" ? t("riskLevelCol") : `Risk: ${riskFilter === "High" ? t("highRiskFilter") : riskFilter === "Medium" ? t("mediumRiskFilter") : t("lowRiskFilter")}`}
                             <Filter className={`h-3 w-3 ${riskFilter !== "All" ? "text-[#606C38] fill-[#606C38]" : "text-slate-400"}`} />
                           </div>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" className="w-40 rounded-xl border-slate-200 bg-white shadow-lg">
-                          <DropdownMenuLabel className="text-xs text-slate-500">Filter by Risk</DropdownMenuLabel>
+                          <DropdownMenuLabel className="text-xs text-slate-500">{t("filterByRisk")}</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => setRiskFilter("All")} className="cursor-pointer font-medium text-slate-700">All Patients {riskFilter === "All" && <span className="ml-auto text-[#606C38]">✓</span>}</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setRiskFilter("High")} className="cursor-pointer text-red-700 font-medium">High Risk {riskFilter === "High" && <span className="ml-auto text-red-700">✓</span>}</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setRiskFilter("Medium")} className="cursor-pointer text-amber-700 font-medium">Medium Risk {riskFilter === "Medium" && <span className="ml-auto text-amber-700">✓</span>}</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setRiskFilter("Low")} className="cursor-pointer text-green-700 font-medium">Low Risk {riskFilter === "Low" && <span className="ml-auto text-green-700">✓</span>}</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setRiskFilter("All")} className="cursor-pointer font-medium text-slate-700">{t("allPatientsFilter")} {riskFilter === "All" && <span className="ml-auto text-[#606C38]">✓</span>}</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setRiskFilter("High")} className="cursor-pointer text-red-700 font-medium">{t("highRiskFilter")} {riskFilter === "High" && <span className="ml-auto text-red-700">✓</span>}</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setRiskFilter("Medium")} className="cursor-pointer text-amber-700 font-medium">{t("mediumRiskFilter")} {riskFilter === "Medium" && <span className="ml-auto text-amber-700">✓</span>}</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setRiskFilter("Low")} className="cursor-pointer text-green-700 font-medium">{t("lowRiskFilter")} {riskFilter === "Low" && <span className="ml-auto text-green-700">✓</span>}</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableHead>
-                    <SortableHeader label="Barangay" sortKey="barangay" />
+                    <SortableHeader label={t("barangayCol")} sortKey="barangay" />
                   </>
                 )}
                 <TableHead className="w-16"></TableHead>
@@ -794,9 +798,9 @@ export default function UserManagement() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={7} className="h-24 text-center text-slate-500">Loading database...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="h-24 text-center text-slate-500">{t("loadingDatabase")}</TableCell></TableRow>
               ) : paginatedUsers.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="h-24 text-center text-slate-500">No {activeTab} found matching your criteria.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="h-24 text-center text-slate-500">{t("noUsersFound")}</TableCell></TableRow>
               ) : (
                 paginatedUsers.map((user) => (
                   <TableRow 
@@ -838,7 +842,7 @@ export default function UserManagement() {
                             user.risk_level === 'Medium' ? 'bg-amber-100 text-amber-800' :
                             user.risk_level === 'Low' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
                           }`}>
-                            {user.risk_level || "Pending"}
+                            {user.risk_level === 'High' ? t("highRiskFilter") : user.risk_level === 'Medium' ? t("mediumRiskFilter") : user.risk_level === 'Low' ? t("lowRiskFilter") : "Pending"}
                           </span>
                         </TableCell>
                         <TableCell className="text-slate-600">{user.barangay || "N/A"}</TableCell>
@@ -855,13 +859,13 @@ export default function UserManagement() {
                         <DropdownMenuContent align="end" className="rounded-xl border-slate-200 bg-white shadow-lg">
                           {activeTab === "patients" && (
                             <DropdownMenuItem onClick={() => handleReviewID(user)} className="cursor-pointer font-medium text-blue-600">
-                              <Eye className="mr-2 h-4 w-4" /> View ID
+                              <Eye className="mr-2 h-4 w-4" /> {t("viewId")}
                             </DropdownMenuItem>
                           )}
-                          <DropdownMenuItem onClick={() => { setEditingUser({ ...user }); setEditDialogOpen(true); }} className="cursor-pointer font-medium text-slate-700">Edit details</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleResetPassword(user)} className="cursor-pointer font-medium text-slate-700">Reset Password</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { setEditingUser({ ...user }); setEditDialogOpen(true); }} className="cursor-pointer font-medium text-slate-700">{t("editDetails")}</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleResetPassword(user)} className="cursor-pointer font-medium text-slate-700">{t("resetPassword")}</DropdownMenuItem>
                           <DropdownMenuItem className="text-red-600 cursor-pointer font-medium focus:text-red-700 focus:bg-red-50" onClick={() => handleDeleteUser(user)}>
-                            Delete User
+                            {t("deleteUser")}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -876,7 +880,7 @@ export default function UserManagement() {
           {!loading && processedData.length > 0 && (
             <div className="flex items-center justify-between border-t border-slate-200 px-6 py-3">
               <div className="text-sm text-slate-500">
-                Showing {processedData.length === 0 ? 0 : ((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, processedData.length)} of {processedData.length} entries
+                {t("showing")} {processedData.length === 0 ? 0 : ((currentPage - 1) * itemsPerPage) + 1} {t("to")} {Math.min(currentPage * itemsPerPage, processedData.length)} {t("of")} {processedData.length} {t("entries")}
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="h-8 w-8 p-0 rounded-lg border-slate-200 text-slate-600"><ChevronLeft className="h-4 w-4" /></Button>
@@ -891,11 +895,11 @@ export default function UserManagement() {
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
         <DialogContent className="rounded-2xl sm:max-w-[425px] md:max-w-[600px] bg-white border-slate-200 shadow-xl font-sans">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-slate-900">Add New {activeTab === 'doctors' ? 'Doctor/Staff' : 'Patient'}</DialogTitle>
+            <DialogTitle className="text-xl font-bold text-slate-900">{activeTab === 'doctors' ? t("addNewDoctor") : t("addNewPatient")}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4 md:grid-cols-2">
             <div className="space-y-2 md:col-span-2">
-              <Label className="text-slate-700 font-semibold">Full Name</Label>
+              <Label className="text-slate-700 font-semibold">{t("fullNameLabel")}</Label>
               <Input 
                 className="rounded-xl border-slate-200 bg-white focus-visible:ring-[#606C38] text-slate-900" 
                 value={newUser.name} 
@@ -903,11 +907,7 @@ export default function UserManagement() {
                   const val = e.target.value;
                   const sanitized = val.replace(/[^a-zA-Z\sñÑ.-]/g, '');
                   if (val !== sanitized) {
-                    toast({ 
-                      title: "Invalid Input", 
-                      description: "Only characters, spaces, and hyphens are allowed for names.", 
-                      className: "bg-white text-slate-900 font-sans shadow-lg rounded-xl border border-slate-200" 
-                    });
+                    triggerAlert("Invalid Input", "Only characters, spaces, and hyphens are allowed for names.", "error");
                   }
                   setNewUser({ ...newUser, name: sanitized });
                 }} 
@@ -915,11 +915,11 @@ export default function UserManagement() {
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-slate-700 font-semibold">Email</Label>
+              <Label className="text-slate-700 font-semibold">{t("emailLabel")}</Label>
               <Input className="rounded-xl border-slate-200 bg-white focus-visible:ring-[#606C38] text-slate-900" value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} placeholder="email@example.com" />
             </div>
             <div className="space-y-2">
-              <Label className="text-slate-700 font-semibold">Contact Number</Label>
+              <Label className="text-slate-700 font-semibold">{t("contactNumberLabel")}</Label>
               <Input 
                 className="rounded-xl border-slate-200 bg-white focus-visible:ring-[#606C38] text-slate-900" 
                 value={newUser.contact} 
@@ -927,11 +927,7 @@ export default function UserManagement() {
                   const val = e.target.value;
                   const onlyNumbers = val.replace(/[^0-9]/g, '');
                   if (val !== onlyNumbers) {
-                    toast({ 
-                      title: "Invalid Input", 
-                      description: "Only numbers are allowed for contact details.", 
-                      className: "bg-white text-slate-900 font-sans shadow-lg rounded-xl border border-slate-200" 
-                    });
+                    triggerAlert("Invalid Input", "Only numbers are allowed for contact details.", "error");
                   }
                   setNewUser({ ...newUser, contact: onlyNumbers.slice(0, 11) });
                 }} 
@@ -944,15 +940,15 @@ export default function UserManagement() {
             {activeTab === 'doctors' && (
               <>
                 <div className="space-y-2">
-                  <Label className="text-slate-700 font-semibold">Clinic Code (Optional)</Label>
-                  <Input className="rounded-xl border-slate-200 bg-white focus-visible:ring-[#606C38] text-slate-900" value={newUser.clinic_code} onChange={(e) => setNewUser({ ...newUser, clinic_code: e.target.value })} placeholder="CAR-001" />
+                  <Label className="text-slate-700 font-semibold">{t("clinicCodeOptional")}</Label>
+                  <Input className="rounded-xl border-slate-200 bg-white focus-visible:ring-[#606C38] text-slate-900" value={newUser.clinic_code} onChange={(e) => setNewUser({ ...newUser, clinic_code: e.target.value })} placeholder="Leave blank to auto-generate" />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-slate-700 font-semibold">License/PRC No. (Optional)</Label>
+                  <Label className="text-slate-700 font-semibold">{t("licenseOptional")}</Label>
                   <Input className="rounded-xl border-slate-200 bg-white focus-visible:ring-[#606C38] text-slate-900" value={newUser.license_number} onChange={(e) => setNewUser({ ...newUser, license_number: e.target.value })} placeholder="0123456" />
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <Label className="text-slate-700 font-semibold">Assigned Barangay (Optional)</Label>
+                  <Label className="text-slate-700 font-semibold">{t("barangayOptional")}</Label>
                   <Input className="rounded-xl border-slate-200 bg-white focus-visible:ring-[#606C38] text-slate-900" value={newUser.barangay} onChange={(e) => setNewUser({ ...newUser, barangay: e.target.value })} placeholder="Mabuhay" />
                 </div>
               </>
@@ -962,7 +958,7 @@ export default function UserManagement() {
             {activeTab === 'patients' && (
               <>
                 <div className="space-y-2">
-                  <Label className="text-slate-700 font-semibold">Age</Label>
+                  <Label className="text-slate-700 font-semibold">{t("ageLabel")}</Label>
                   <Input 
                     type="text" 
                     maxLength={3} 
@@ -972,11 +968,7 @@ export default function UserManagement() {
                       const val = e.target.value;
                       const onlyNumbers = val.replace(/[^0-9]/g, '');
                       if (val !== onlyNumbers) {
-                        toast({ 
-                          title: "Invalid Input", 
-                          description: "Only numbers are allowed for age.", 
-                          className: "bg-white text-slate-900 font-sans shadow-lg rounded-xl border border-slate-200" 
-                        });
+                        triggerAlert("Invalid Input", "Only numbers are allowed for age.", "error");
                       }
                       setNewUser({ ...newUser, age: onlyNumbers.slice(0, 3) });
                     }} 
@@ -984,13 +976,13 @@ export default function UserManagement() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-slate-700 font-semibold">Gender</Label>
+                  <Label className="text-slate-700 font-semibold">{t("genderLabel")}</Label>
                   <Select onValueChange={(value) => setNewUser({ ...newUser, gender: value })}>
-                    <SelectTrigger className="rounded-xl border-slate-200 bg-white text-slate-900 focus:ring-[#606C38]"><SelectValue placeholder="Select gender" /></SelectTrigger>
+                    <SelectTrigger className="rounded-xl border-slate-200 bg-white text-slate-900 focus:ring-[#606C38]"><SelectValue placeholder={t("selectGender")} /></SelectTrigger>
                     <SelectContent className="bg-white border-slate-200">
-                      <SelectItem value="Male" className="text-slate-700 font-medium">Male</SelectItem>
-                      <SelectItem value="Female" className="text-slate-700 font-medium">Female</SelectItem>
-                      <SelectItem value="Other" className="text-slate-700 font-medium">Other</SelectItem>
+                      <SelectItem value="Male" className="text-slate-700 font-medium">{t("male")}</SelectItem>
+                      <SelectItem value="Female" className="text-slate-700 font-medium">{t("female")}</SelectItem>
+                      <SelectItem value="Other" className="text-slate-700 font-medium">{t("other")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -998,9 +990,9 @@ export default function UserManagement() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddDialogOpen(false)} disabled={isSubmitting} className="rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50">Cancel</Button>
+            <Button variant="outline" onClick={() => setAddDialogOpen(false)} disabled={isSubmitting} className="rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50">{t("cancel")}</Button>
             <Button onClick={handleAddUser} disabled={isSubmitting} className="rounded-xl bg-[#606C38] hover:bg-[#2D3B1E] text-white shadow-sm">
-              {isSubmitting ? "Creating..." : `Add ${activeTab === 'doctors' ? 'Doctor' : 'Patient'}`}
+              {isSubmitting ? t("creating") : activeTab === 'doctors' ? t("addDoctor") : t("addPatient")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1010,12 +1002,12 @@ export default function UserManagement() {
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent className="rounded-2xl sm:max-w-[425px] bg-white border-slate-200 shadow-xl font-sans">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-slate-900">Edit Details</DialogTitle>
+            <DialogTitle className="text-xl font-bold text-slate-900">{t("editDetailsTitle")}</DialogTitle>
           </DialogHeader>
           {editingUser && (
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label className="text-slate-700 font-semibold">Full Name</Label>
+                <Label className="text-slate-700 font-semibold">{t("fullNameLabel")}</Label>
                 <Input 
                   className="rounded-xl border-slate-200 bg-white focus-visible:ring-[#606C38] text-slate-900" 
                   value={editingUser.name} 
@@ -1023,18 +1015,14 @@ export default function UserManagement() {
                     const val = e.target.value;
                     const sanitized = val.replace(/[^a-zA-Z\sñÑ.-]/g, '');
                     if (val !== sanitized) {
-                      toast({ 
-                        title: "Invalid Input", 
-                        description: "Only characters, spaces, and hyphens are allowed for names.", 
-                        className: "bg-white text-slate-900 font-sans shadow-lg rounded-xl border border-slate-200" 
-                      });
+                      triggerAlert("Invalid Input", "Only characters, spaces, and hyphens are allowed for names.", "error");
                     }
                     setEditingUser({ ...editingUser, name: sanitized });
                   }} 
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-slate-700 font-semibold">Contact Number</Label>
+                <Label className="text-slate-700 font-semibold">{t("contactNumberLabel")}</Label>
                 <Input 
                   className="rounded-xl border-slate-200 bg-white focus-visible:ring-[#606C38] text-slate-900" 
                   value={editingUser.contact} 
@@ -1043,11 +1031,7 @@ export default function UserManagement() {
                     const val = e.target.value;
                     const onlyNumbers = val.replace(/[^0-9]/g, '');
                     if (val !== onlyNumbers) {
-                      toast({ 
-                        title: "Invalid Input", 
-                        description: "Only numbers are allowed for contact details.", 
-                        className: "bg-white text-slate-900 font-sans shadow-lg rounded-xl border border-slate-200" 
-                      });
+                      triggerAlert("Invalid Input", "Only numbers are allowed for contact details.", "error");
                     }
                     setEditingUser({ ...editingUser, contact: onlyNumbers.slice(0, 11) });
                   }} 
@@ -1055,15 +1039,15 @@ export default function UserManagement() {
               </div>
               {editingUser.role === 'doctor' && (
                 <div className="space-y-2">
-                  <Label className="text-slate-700 font-semibold">License/PRC No.</Label>
+                  <Label className="text-slate-700 font-semibold">{t("licenseOptional")}</Label>
                   <Input className="rounded-xl border-slate-200 bg-white focus-visible:ring-[#606C38] text-slate-900" value={editingUser.license_number || ''} onChange={(e) => setEditingUser({ ...editingUser, license_number: e.target.value })} />
                 </div>
               )}
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialogOpen(false)} className="rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50">Cancel</Button>
-            <Button onClick={handleEditUser} className="rounded-xl bg-[#606C38] hover:bg-[#2D3B1E] text-white shadow-sm">Save Changes</Button>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)} className="rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50">{t("cancel")}</Button>
+            <Button onClick={handleEditUser} className="rounded-xl bg-[#606C38] hover:bg-[#2D3B1E] text-white shadow-sm">{t("saveChanges")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1074,18 +1058,18 @@ export default function UserManagement() {
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-red-600 flex items-center gap-2">
               <Trash2 className="h-5 w-5" />
-              Confirm Bulk Deletion
+              {t("confirmBulkDeletion")}
             </DialogTitle>
             <DialogDescription className="text-slate-600 mt-2">
-              Are you sure you want to permanently delete <strong>{selectedUserIds.size}</strong> selected users? This action cannot be undone and will remove all their associated data from the database.
+              {t("bulkDeleteUserWarning")} <strong>{selectedUserIds.size}</strong> {t("bulkDeleteUserWarning2")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-6">
             <Button variant="outline" onClick={() => setBulkDeleteDialogOpen(false)} disabled={isSubmitting} className="rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50">
-              Cancel
+              {t("cancel")}
             </Button>
             <Button variant="destructive" onClick={handleBulkDelete} disabled={isSubmitting} className="rounded-xl shadow-sm">
-              {isSubmitting ? "Deleting..." : "Yes, delete them"}
+              {isSubmitting ? t("deleting") : t("yesDeleteThem")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1095,8 +1079,8 @@ export default function UserManagement() {
       <Dialog open={verifyDialogOpen} onOpenChange={setVerifyDialogOpen}>
         <DialogContent className="rounded-2xl sm:max-w-[500px] bg-white border-slate-200 shadow-xl font-sans">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-slate-900">Proof of Identity</DialogTitle>
-            <DialogDescription className="text-slate-500">Viewing registration documents for {reviewUser?.name}</DialogDescription>
+            <DialogTitle className="text-xl font-bold text-slate-900">{t("proofOfIdentity")}</DialogTitle>
+            <DialogDescription className="text-slate-500">{t("viewingDocsFor")} {reviewUser?.name}</DialogDescription>
           </DialogHeader>
           <div className="py-4 flex flex-col items-center">
             {proofUrl ? (
@@ -1106,23 +1090,23 @@ export default function UserManagement() {
             ) : (
               <div className="w-full aspect-video flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 text-slate-400">
                 <Eye className="h-10 w-10 mb-2 opacity-20" />
-                <p className="text-sm font-medium">No image uploaded</p>
+                <p className="text-sm font-medium">{t("noImageUploaded")}</p>
               </div>
             )}
             <div className="mt-4 w-full grid grid-cols-2 gap-4 text-sm">
                 <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-                  <Label className="text-slate-500 block mb-1">Full Name</Label>
+                  <Label className="text-slate-500 block mb-1">{t("fullNameLabel")}</Label>
                   <span className="font-bold text-slate-900">{reviewUser?.name}</span>
                 </div>
                 <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-                  <Label className="text-slate-500 block mb-1">Barangay</Label>
+                  <Label className="text-slate-500 block mb-1">{t("barangayCol")}</Label>
                   <span className="font-bold text-slate-900">{reviewUser?.barangay || "N/A"}</span>
                 </div>
             </div>
           </div>
           <DialogFooter>
             <Button onClick={() => setVerifyDialogOpen(false)} className="rounded-xl bg-[#606C38] hover:bg-[#2D3B1E] text-white shadow-sm w-full sm:w-auto">
-              Close Viewer
+              {t("closeViewer")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1132,9 +1116,9 @@ export default function UserManagement() {
       <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
         <DialogContent className="rounded-2xl sm:max-w-[400px] bg-white border-slate-200 shadow-xl font-sans">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-slate-900">Export Registry Data</DialogTitle>
+            <DialogTitle className="text-xl font-bold text-slate-900">{t("exportRegistryData")}</DialogTitle>
             <DialogDescription className="text-slate-500">
-              Select the format you wish to export the current {activeTab} list to.
+              {t("exportFormatDesc")}
             </DialogDescription>
           </DialogHeader>
           
@@ -1146,8 +1130,8 @@ export default function UserManagement() {
             >
               <FileDown className="mr-3 h-5 w-5 text-red-500" />
               <div className="flex flex-col items-start">
-                <span>Standard PDF Document</span>
-                <span className="text-xs text-slate-400 font-normal">Best for printing and visual reporting</span>
+                <span>{t("standardPdfDoc")}</span>
+                <span className="text-xs text-slate-400 font-normal">{t("pdfDesc")}</span>
               </div>
             </Button>
             
@@ -1158,15 +1142,15 @@ export default function UserManagement() {
             >
               <FileSpreadsheet className="mr-3 h-5 w-5 text-emerald-600" />
               <div className="flex flex-col items-start">
-                <span>ITIS-Compatible CSV</span>
-                <span className="text-xs text-slate-400 font-normal">Raw data formatted for DOH alignment</span>
+                <span>{t("itisCsvDoc")}</span>
+                <span className="text-xs text-slate-400 font-normal">{t("csvDesc")}</span>
               </div>
             </Button>
           </div>
 
           <DialogFooter>
             <Button variant="ghost" onClick={() => setExportDialogOpen(false)} className="rounded-xl text-slate-500 hover:text-slate-700">
-              Cancel
+              {t("cancel")}
             </Button>
           </DialogFooter>
         </DialogContent>

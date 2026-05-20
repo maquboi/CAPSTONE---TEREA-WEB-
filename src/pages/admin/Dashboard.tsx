@@ -4,8 +4,9 @@ import { supabase } from "../../lib/supabase";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { StatCard } from "@/components/ui/stat-card";
 import { RecentActivityCard } from "@/components/dashboard/RecentActivityCard";
+import { useLanguage } from "./LanguageContext";
 import { 
-  Users, AlertTriangle, FileText, Shield, Loader2, ActivitySquare, CheckCircle2
+  Users, AlertTriangle, FileText, Shield, Loader2, ActivitySquare, CheckCircle2, Headset
 } from "lucide-react";
 // Import charting components
 import { 
@@ -15,6 +16,7 @@ import {
 const PIE_COLORS = ['#ef4444', '#f59e0b', '#10b981', '#94a3b8']; // Red, Amber, Green, Slate
 
 export default function AdminDashboard() {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -127,46 +129,46 @@ export default function AdminDashboard() {
 
   // Data for Pie Chart
   const riskDistributionData = [
-    { name: 'High Risk', value: dashboardStats.highRiskCases },
-    { name: 'Medium Risk', value: dashboardStats.mediumRiskCases },
-    { name: 'Low Risk', value: dashboardStats.lowRiskCases },
-    { name: 'Unassessed', value: dashboardStats.totalPatients - (dashboardStats.highRiskCases + dashboardStats.mediumRiskCases + dashboardStats.lowRiskCases) }
+    { name: t("highRiskLabel") || 'High Risk', value: dashboardStats.highRiskCases },
+    { name: t("mediumRiskLabel") || 'Medium Risk', value: dashboardStats.mediumRiskCases },
+    { name: t("lowRiskLabel") || 'Low Risk', value: dashboardStats.lowRiskCases },
+    { name: t("unassessedLabel") || 'Unassessed', value: dashboardStats.totalPatients - (dashboardStats.highRiskCases + dashboardStats.mediumRiskCases + dashboardStats.lowRiskCases) }
   ].filter(d => d.value > 0);
 
   return (
     <DashboardLayout role="admin" userName={adminName}>
       <div className="space-y-6 animate-fade-in font-sans">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Analytics Dashboard</h1>
-          <p className="text-sm text-slate-500 mt-1">Overview of system utilization and demographic risk assessments</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t("dashboardTitle")}</h1>
+          <p className="text-sm text-slate-500 mt-1">{t("dashboardSubtitle")}</p>
         </div>
 
         {/* Top-Level Metrics - 4 Columns */}
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard 
-            title="Total Registered Patients" 
+            title={t("totalPatients")} 
             value={dashboardStats.totalPatients.toString()} 
-            description="Active in system" 
+            description={t("activeInSystem")} 
             icon={Users} 
             trend={{ value: 12, isPositive: true }} 
           />
           <StatCard 
-            title="Assessments Completed" 
+            title={t("assessmentsCompleted")} 
             value={dashboardStats.assessmentsCompleted.toString()} 
-            description="12-question screenings" 
+            description={t("screenings")} 
             icon={ActivitySquare} 
             trend={{ value: 5, isPositive: true }} 
           />
           <StatCard 
-            title="Pending Verifications" 
+            title={t("pendingVerifications")} 
             value={dashboardStats.pendingVerifications.toString()} 
-            description="Requires admin review" 
+            description={t("requiresAdmin")} 
             icon={CheckCircle2} 
           />
           <StatCard 
-            title="High-Risk Cases" 
+            title={t("highRiskCases")} 
             value={dashboardStats.highRiskCases.toString()} 
-            description="Requires immediate action" 
+            description={t("immediateAction")} 
             icon={AlertTriangle} 
             variant="danger" 
             trend={{ value: 8, isPositive: false }} 
@@ -177,7 +179,7 @@ export default function AdminDashboard() {
         <div className="grid gap-4 grid-cols-1">
           {/* Risk Distribution Chart */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
-            <h3 className="font-semibold text-slate-800 mb-4">Patient Risk Distribution</h3>
+            <h3 className="font-semibold text-slate-800 mb-4">{t("riskDistribution")}</h3>
             <div className="flex-1 min-h-[300px]">
               {riskDistributionData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
@@ -202,7 +204,7 @@ export default function AdminDashboard() {
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full flex items-center justify-center text-slate-400 text-sm">Not enough data to display chart</div>
+                <div className="h-full flex items-center justify-center text-slate-400 text-sm">{t("noData")}</div>
               )}
             </div>
           </div>
@@ -213,24 +215,30 @@ export default function AdminDashboard() {
           
           {/* Quick Actions List */}
           <div className="lg:col-span-1 space-y-4">
-            <h3 className="font-semibold text-slate-800 px-1">Quick Actions</h3>
+            <h3 className="font-semibold text-slate-800 px-1">{t("quickActions")}</h3>
             <QuickActionCard 
               icon={FileText} 
-              title="Generate Monthly Report" 
-              description="Export TB trend report for DOH compliance" 
+              title={t("genReport")} 
+              description={t("genReportDesc")} 
               onClick={() => navigate("/admin/reports")} 
             />
             <QuickActionCard 
               icon={Users} 
-              title="User Management" 
-              description="Review pending verifications and staff accounts" 
+              title={t("userMgmt")} 
+              description={t("userMgmtDesc")} 
               onClick={() => navigate("/admin/users")} 
             />
             <QuickActionCard 
               icon={Shield} 
-              title="View Audit Logs" 
-              description="Review system actions and security changes" 
+              title={t("viewAudit")} 
+              description={t("viewAuditDesc")} 
               onClick={() => navigate("/admin/audit-logs")} 
+            />
+            <QuickActionCard 
+              icon={Headset} 
+              title={t("support")} 
+              description={t("supportDesc")} 
+              onClick={() => navigate("/admin/support-tickets")} 
             />
           </div>
 

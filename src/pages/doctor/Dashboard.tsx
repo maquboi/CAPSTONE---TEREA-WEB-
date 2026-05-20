@@ -3,20 +3,68 @@ import { supabase } from "../../lib/supabase";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { StatCard } from "@/components/ui/stat-card";
 import { PatientQueueTable } from "@/components/dashboard/PatientQueueTable";
-import { RecentActivityCard } from "@/components/dashboard/RecentActivityCard"; // Ensure this path matches the file created above
+import { RecentActivityCard } from "@/components/dashboard/RecentActivityCard"; 
 import { Button } from "@/components/ui/button"; 
 import { useToast } from "@/hooks/use-toast"; 
+import { Dialog, DialogContent, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
 import { 
   Users, 
   AlertTriangle, 
   CalendarCheck, 
-  Copy,       
-  Check       
+  Copy, 
+  Check,
+  CheckCircle,
+  AlertCircle
 } from "lucide-react";
+import { useLanguage } from "../admin/LanguageContext";
+
+const translations = {
+  en: {
+    goodMorning: "Good morning",
+    attention: "Here's what needs your attention today",
+    clinicalCode: "Your Clinical Code",
+    copy: "Copy",
+    copied: "Copied",
+    codeCopiedTitle: "Clinical Code Copied!",
+    codeCopiedDesc: "Code:",
+    myPatients: "My Patients",
+    highRiskQueue: "High-Risk Queue",
+    newRequests: "New Requests",
+    loading: "LOADING...",
+    okBtn: "Okay",
+    error: "Error",
+    copyFailed: "Failed to copy code"
+  },
+  fil: {
+    goodMorning: "Magandang umaga",
+    attention: "Narito ang mga kailangan ng iyong pansin ngayon",
+    clinicalCode: "Ang Iyong Clinical Code",
+    copy: "Kopyahin",
+    copied: "Nakopya",
+    codeCopiedTitle: "Nakopya ang Clinical Code!",
+    codeCopiedDesc: "Code:",
+    myPatients: "Aking Pasyente",
+    highRiskQueue: "Pila ng Mataas na Panganib",
+    newRequests: "Mga Bagong Request",
+    loading: "KINAKARGA...",
+    okBtn: "Okay",
+    error: "Error",
+    copyFailed: "Hindi nakopya ang code"
+  }
+};
 
 export default function DoctorDashboard() {
   const { toast } = useToast();
-  const [doctorData, setDoctorData] = useState({ name: "", id: "", clinicCode: "LOADING..." });
+  const { language } = useLanguage();
+  const t = (key: keyof typeof translations.en) => translations[language as 'en' | 'fil'][key] || translations.en[key];
+
+  // Centralized Alert State
+  const [alert, setAlert] = useState({ open: false, title: "", message: "", type: "success" as "success" | "error" });
+  const triggerAlert = (title: string, message: string, type: "success" | "error" = "success") => {
+    setAlert({ open: true, title, message, type });
+  };
+
+  const [doctorData, setDoctorData] = useState({ name: "", id: "", clinicCode: t("loading") });
   const [stats, setStats] = useState({ totalPatients: 0, highRisk: 0, pendingRequests: 0 });
   const [recentActivities, setRecentActivities] = useState<any[]>([]); 
   const [loading, setLoading] = useState(true);
@@ -115,46 +163,84 @@ export default function DoctorDashboard() {
     return () => { if (channel) supabase.removeChannel(channel); };
   }, []);
 
-  const handleCopyCode = () => {
-    if (!doctorData.clinicCode) return;
-    navigator.clipboard.writeText(doctorData.clinicCode);
-    setCopied(true);
-    toast({ title: "Clinical Code Copied!", description: `Code: ${doctorData.clinicCode}` });
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopyCode = async () => {
+    const textToCopy = doctorData.clinicCode;
+    if (!textToCopy || textToCopy === t("loading")) return;
+
+    try {
+      // Try modern clipboard API first
+      await navigator.clipboard.writeText(textToCopy);
+      setCopied(true);
+      triggerAlert(t("codeCopiedTitle"), `${t("codeCopiedDesc")} ${textToCopy}`, "success");
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      // Fallback for browsers that don't support modern API or block permissions
+      try {
+        const textArea = document.createElement("textarea");
+        textArea.value = textToCopy;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+        
+        setCopied(true);
+        triggerAlert(t("codeCopiedTitle"), `${t("codeCopiedDesc")} ${textToCopy}`, "success");
+        setTimeout(() => setCopied(false), 2000);
+      } catch (fallbackErr) {
+        console.error("Copy failed:", fallbackErr);
+        triggerAlert(t("error"), t("copyFailed"), "error");
+      }
+    }
   };
 
   return (
     <DashboardLayout role="doctor" userName={doctorData.name}>
+
+      {/* Centralized Notification Pop-up with Portal for guaranteed visibility */}
+      <Dialog open={alert.open} onOpenChange={(open) => setAlert({...alert, open})}>
+        <DialogPortal>
+          <DialogOverlay className="bg-black/40 backdrop-blur-sm" />
+          <DialogContent className="sm:max-w-[400px] rounded-2xl p-6 text-center animate-in fade-in zoom-in-95 duration-200 bg-white border-slate-200 shadow-xl font-sans">
+            <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${alert.type === 'success' ? 'bg-green-100' : 'bg-red-100'}`}>
+              {alert.type === 'success' ? <CheckCircle className="h-6 w-6 text-green-600" /> : <AlertCircle className="h-6 w-6 text-red-600" />}
+            </div>
+            <h2 className="text-lg font-bold text-slate-900">{alert.title}</h2>
+            <p className="text-slate-500 mt-2 text-sm">{alert.message}</p>
+            <Button className="mt-6 w-full rounded-xl bg-[#606C38] hover:bg-[#2D3B1E] text-white" onClick={() => setAlert({...alert, open: false})}>{t("okBtn")}</Button>
+          </DialogContent>
+        </DialogPortal>
+      </Dialog>
+
       <div className="space-y-6 animate-fade-in">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-2xl font-extrabold tracking-tight text-[#2D3B1E]">
-              Good morning, Dr. {doctorData.name.split(' ')[0] || "..."}
+              {t("goodMorning")}, Dr. {doctorData.name.split(' ')[0] || "..."}
             </h1>
             <p className="text-[#606C38]/80 font-medium mt-1">
-              Here's what needs your attention today
+              {t("attention")}
             </p>
           </div>
 
           {!loading && (
             <div className="dashboard-surface flex items-center gap-3 rounded-xl border-[#DDE5B6] p-2 pr-4">
               <div className="flex flex-col">
-                <span className="text-[10px] uppercase font-bold text-[#606C38]/70 tracking-wider">Your Clinical Code</span>
+                <span className="text-[10px] uppercase font-bold text-[#606C38]/70 tracking-wider">{t("clinicalCode")}</span>
                 <span className="font-mono text-lg font-bold text-[#2D3B1E] tracking-wide">{doctorData.clinicCode}</span>
               </div>
               <div className="h-8 w-[1px] bg-[#DDE5B6] mx-2"></div>
               <Button variant="ghost" size="sm" className="h-8 gap-2 text-[#606C38]" onClick={handleCopyCode}>
                 {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                {copied ? "Copied" : "Copy"}
+                {copied ? t("copied") : t("copy")}
               </Button>
             </div>
           )}
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
-          <StatCard title="My Patients" value={stats.totalPatients.toString()} icon={Users} />
-          <StatCard title="High-Risk Queue" value={stats.highRisk.toString()} icon={AlertTriangle} variant="danger" />
-          <StatCard title="New Requests" value={stats.pendingRequests.toString()} icon={CalendarCheck} variant="primary" />
+          <StatCard title={t("myPatients")} value={stats.totalPatients.toString()} icon={Users} />
+          <StatCard title={t("highRiskQueue")} value={stats.highRisk.toString()} icon={AlertTriangle} variant="danger" />
+          <StatCard title={t("newRequests")} value={stats.pendingRequests.toString()} icon={CalendarCheck} variant="primary" />
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">

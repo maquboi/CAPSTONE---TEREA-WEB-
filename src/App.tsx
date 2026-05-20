@@ -4,9 +4,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
+// Global Contexts
+import { LanguageProvider } from "./pages/admin/LanguageContext";
+
 // Pages
 import LandingPage from "./pages/LandingPage";
 import Login from "./pages/Login";
+import ResetPassword from "./pages/admin/ResetPassword";
 import NotFound from "./pages/NotFound";
 
 // Admin Pages
@@ -17,6 +21,7 @@ import AuditLogs from "./pages/admin/AuditLogs";
 import ErrorLogs from "./pages/admin/ErrorLogs";
 import AdminProfile from "./pages/admin/Profile";
 import AdminSettings from "./pages/admin/Settings";
+import ITSupport from "./pages/admin/ITSupport";
 
 // Doctor Pages
 import DoctorDashboard from "./pages/doctor/Dashboard";
@@ -26,46 +31,49 @@ import Appointments from "./pages/doctor/Appointments";
 import ActivityLogs from "./pages/doctor/ActivityLogs";
 import DoctorProfile from "./pages/doctor/Profile";
 import DoctorSettings from "./pages/doctor/Settings";
-import PatientDetail from "./pages/doctor/PatientDetail"; // <-- ADDED: Import the new detail page
+import PatientDetail from "./pages/doctor/PatientDetail"; 
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          {/* Public routes */}
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<Login />} />
-          
-          {/* Admin routes */}
-          <Route path="/admin/dashboard" element={<AdminDashboard />} />
-          <Route path="/admin/users" element={<UserManagement />} />
-          <Route path="/admin/reports" element={<SystemReports />} />
-          <Route path="/admin/audit-logs" element={<AuditLogs />} />
-          <Route path="/admin/error-logs" element={<ErrorLogs />} />
-          <Route path="/admin/profile" element={<AdminProfile />} />
-          <Route path="/admin/settings" element={<AdminSettings />} />
-          
-          {/* Doctor routes */}
-          <Route path="/doctor/dashboard" element={<DoctorDashboard />} />
-          <Route path="/doctor/patients" element={<AllPatients />} />
-          <Route path="/doctor/follow-ups" element={<FollowUpTracker />} />
-          <Route path="/doctor/appointments" element={<Appointments />} />
-          <Route path="/doctor/activity" element={<ActivityLogs />} />
-          <Route path="/doctor/profile" element={<DoctorProfile />} />
-          <Route path="/doctor/settings" element={<DoctorSettings />} />
-          
-          {/* ADDED: Dynamic Route for viewing a specific patient */}
-          <Route path="/doctor/patient-details/:id" element={<PatientDetail />} />
-          
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
+      {/* Wrapped the entire app in the LanguageProvider */}
+      <LanguageProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            
+            {/* Admin routes */}
+            <Route path="/admin/dashboard" element={<AdminDashboard />} />
+            <Route path="/admin/users" element={<UserManagement />} />
+            <Route path="/admin/reports" element={<SystemReports />} />
+            <Route path="/admin/audit-logs" element={<AuditLogs />} />
+            <Route path="/admin/error-logs" element={<ErrorLogs />} />
+            <Route path="/admin/support-tickets" element={<ITSupport />} /> 
+            <Route path="/admin/profile" element={<AdminProfile />} />
+            <Route path="/admin/settings" element={<AdminSettings />} />
+            
+            {/* Doctor routes */}
+            <Route path="/doctor/dashboard" element={<DoctorDashboard />} />
+            <Route path="/doctor/patients" element={<AllPatients />} />
+            <Route path="/doctor/follow-ups" element={<FollowUpTracker />} />
+            <Route path="/doctor/appointments" element={<Appointments />} />
+            <Route path="/doctor/activity" element={<ActivityLogs />} />
+            <Route path="/doctor/profile" element={<DoctorProfile />} />
+            <Route path="/doctor/settings" element={<DoctorSettings />} />
+            <Route path="/doctor/patient-details/:id" element={<PatientDetail />} />
+            
+            {/* Catch-all */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </LanguageProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

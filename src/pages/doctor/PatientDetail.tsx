@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea"; // Added for memo
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -32,20 +33,133 @@ import {
   Wand2,
   Trash2,
   SendHorizontal,
-  Stethoscope
+  Stethoscope,
+  CheckCircle
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "../admin/LanguageContext";
+
+const translations: Record<string, Record<string, string>> = {
+  en: {
+    backBtn: "Back to Patient List",
+    patientInfo: "Patient Info",
+    fullName: "Full Name",
+    treatmentPhase: "Treatment Phase",
+    accountStatus: "Account Status",
+    verifiedPatient: "Verified Patient",
+    pendingVerification: "Pending Verification",
+    symptomatic: "Symptomatic",
+    closeContact: "Close Contact",
+    protocolMemo: "Daily Protocol Memo",
+    memoPlaceholder: "Type specific instructions for today's medication intake...",
+    pushMemo: "Push Memo to Diary",
+    memoSent: "Memo Sent",
+    memoSentDesc: "Instructions pushed to patient's diary.",
+    memoFailed: "Failed to send memo",
+    patientReports: "Patient Reports",
+    noConcerns: "No reported concerns.",
+    roadmapConfig: "Roadmap Configuration",
+    startDate: "Treatment Start Date",
+    endDate: "Treatment End Date",
+    saveSync: "Save & Sync Dates",
+    autoGen: "Auto-Generate TB Protocol",
+    milestoneProgress: "Real-time Roadmap Progress",
+    daysRemaining: "days remaining",
+    progressLabel: "Treatment Progress",
+    adherenceLabel: "Adherence Rate",
+    milestones: "Roadmap Milestones",
+    noMilestones: "No milestones.",
+    dohProtocol: "DOH Protocol",
+    prescriptions: "Prescriptions",
+    newMed: "New Medication",
+    medName: "Meds Name",
+    dosage: "Dosage (500mg)",
+    pushToPatient: "Push to Patient",
+    noPrescriptions: "No active prescriptions.",
+    missingFields: "Missing Fields",
+    missingDates: "Missing Dates",
+    missingDatesDesc: "Please select both a Start Date and an End Date.",
+    success: "Success",
+    treatmentActive: "Treatment activated. Roadmap is now synced.",
+    protocolGenerated: "Protocol Generated",
+    prescriptionAdded: "Prescription Added",
+    prescriptionRemoved: "Prescription Removed",
+    milestoneCompleted: "Milestone Completed",
+    notStarted: "Not Started",
+    intensivePhase: "Intensive Phase",
+    continuationPhase: "Continuation Phase",
+    error: "Error",
+    syncFailed: "Sync Failed"
+  },
+  fil: {
+    backBtn: "Bumalik sa Listahan ng Pasyente",
+    patientInfo: "Impormasyon ng Pasyente",
+    fullName: "Buong Pangalan",
+    treatmentPhase: "Phase ng Gamutan",
+    accountStatus: "Katayuan ng Account",
+    verifiedPatient: "Na-verify na Pasyente",
+    pendingVerification: "Nakabinbing Pag-verify",
+    symptomatic: "Symptomatic",
+    closeContact: "Close Contact",
+    protocolMemo: "Daily Protocol Memo",
+    memoPlaceholder: "Mag-type ng espesyal na instruksyon para sa pag-inom ng gamot...",
+    pushMemo: "Ipadala ang Memo sa Diary",
+    memoSent: "Naipadala ang Memo",
+    memoSentDesc: "Naipadala na ang mga instruksyon sa diary ng pasyente.",
+    memoFailed: "Nabigong ipadala ang memo",
+    patientReports: "Mga Ulat ng Pasyente",
+    noConcerns: "Walang mga iniulat na alalahanin.",
+    roadmapConfig: "Konpigurasyon ng Roadmap",
+    startDate: "Petsa ng Pagsisimula ng Gamutan",
+    endDate: "Petsa ng Pagtatapos ng Gamutan",
+    saveSync: "I-save at I-sync ang mga Petsa",
+    autoGen: "Auto-Generate TB Protocol",
+    milestoneProgress: "Progress ng Roadmap",
+    daysRemaining: "araw na natitira",
+    progressLabel: "Progress ng Gamutan",
+    adherenceLabel: "Adherence Rate",
+    milestones: "Mga Milestone ng Roadmap",
+    noMilestones: "Walang milestones.",
+    dohProtocol: "DOH Protocol",
+    prescriptions: "Mga Reseta",
+    newMed: "Bagong Gamot",
+    medName: "Pangalan ng Gamot",
+    dosage: "Dosage (500mg)",
+    pushToPatient: "Ipadala sa Pasyente",
+    noPrescriptions: "Walang aktibong reseta.",
+    missingFields: "May kulang na impormasyon",
+    missingDates: "Kulang ang Petsa",
+    missingDatesDesc: "Pakipili ang parehong petsa ng pagsisimula at pagtatapos.",
+    success: "Tagumpay",
+    treatmentActive: "Aktibo na ang gamutan. Naka-sync na ang roadmap.",
+    protocolGenerated: "Nabuo na ang Protocol",
+    prescriptionAdded: "Naidagdag ang Reseta",
+    prescriptionRemoved: "Natanggal ang Reseta",
+    milestoneCompleted: "Nakumpleto ang Milestone",
+    notStarted: "Hindi pa nagsisimula",
+    intensivePhase: "Intensive Phase",
+    continuationPhase: "Continuation Phase",
+    error: "Error",
+    syncFailed: "Error sa Pag-sync"
+  }
+};
 
 export default function PatientDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const { language } = useLanguage();
+  const t = (key: string) => translations[language]?.[key] || translations.en[key] || key;
+
+  // Centralized Alert State
+  const [alert, setAlert] = useState({ open: false, title: "", message: "", type: "success" as "success" | "error" });
+  const triggerAlert = (title: string, message: string, type: "success" | "error" = "success") => {
+    setAlert({ open: true, title, message, type });
+  };
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [prescribing, setPrescribing] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [postingMemo, setPostingMemo] = useState(false); // New state
+  const [postingMemo, setPostingMemo] = useState(false);
   const [patient, setPatient] = useState<any>(null);
   
   const [meds, setMeds] = useState<any[]>([]);
@@ -54,23 +168,21 @@ export default function PatientDetail() {
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [memoText, setMemoText] = useState(""); // New state for Memo (Option 4)
+  const [memoText, setMemoText] = useState("");
 
   const [newMed, setNewMed] = useState({ name: "", dosage: "", time: "08:00", start: "", end: "" });
 
-  // --- Audit Logging Helper ---
   const createAuditLog = async (action: string, category: string, target: string, metadata: any = {}, severity: string = 'info') => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const userName = user?.user_metadata?.full_name || "Doctor/Admin";
-
       await supabase.from('audit_logs').insert({
         action_name: action,
         user_name: userName,
         target_entity: target,
-        category: category,
-        severity: severity,
-        metadata: metadata
+        category,
+        severity,
+        metadata
       });
     } catch (err) {
       console.error("Failed to create audit log:", err);
@@ -84,7 +196,6 @@ export default function PatientDetail() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      
       const { data: profile, error: profileErr } = await supabase
         .from('profiles')
         .select('*')
@@ -94,12 +205,7 @@ export default function PatientDetail() {
       if (profileErr) throw profileErr;
       setPatient(profile);
       
-      createAuditLog(
-        "Patient Record Viewed", 
-        "Patient Access", 
-        profile.full_name, 
-        { access_point: "Doctor Dashboard Detail Page" }
-      );
+      createAuditLog("Patient Record Viewed", "Patient Access", profile.full_name, { access_point: "Doctor Dashboard Detail Page" });
 
       if (profile?.treatment_start_date) setStartDate(profile.treatment_start_date);
       if (profile?.treatment_end_date) setEndDate(profile.treatment_end_date);
@@ -120,9 +226,8 @@ export default function PatientDetail() {
         .eq('user_id', id)
         .order('created_at', { ascending: false });
       setNotes(patientNotes || []);
-
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err.message });
+      triggerAlert(t("error"), err.message, "error");
     } finally {
       setLoading(false);
     }
@@ -130,56 +235,29 @@ export default function PatientDetail() {
 
   const handleSaveTreatment = async () => {
     if (!startDate || !endDate) {
-      toast({ 
-        variant: "destructive", 
-        title: "Missing Dates", 
-        description: "Please select both a Start Date and an End Date." 
-      });
+      triggerAlert(t("missingDates"), t("missingDatesDesc"), "error");
       return;
     }
-
     setSaving(true);
     try {
-      const { data: profileData, error: profileError } = await supabase
+      const { error: profileError } = await supabase
         .from('profiles')
-        .update({ 
-          treatment_start_date: startDate, 
-          treatment_end_date: endDate 
-        })
-        .eq('id', id)
-        .select();
-
+        .update({ treatment_start_date: startDate, treatment_end_date: endDate })
+        .eq('id', id);
       if (profileError) throw profileError;
 
-      const { error: connError } = await supabase
-        .from('connections')
-        .update({ status: 'active' })
-        .eq('patient_id', id);
-
+      const { error: connError } = await supabase.from('connections').update({ status: 'active' }).eq('patient_id', id);
       if (connError) throw connError;
 
-      createAuditLog(
-        "Treatment Timeline Updated", 
-        "Patient Access", 
-        patient?.full_name, 
-        { start_date: startDate, end_date: endDate },
-        'warning'
-      );
-
-      toast({ 
-        title: "Success", 
-        description: "Treatment activated. Roadmap is now synced." 
-      });
-      
+      triggerAlert(t("success"), t("treatmentActive"), "success");
       fetchData(); 
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Sync Failed", description: err.message });
+      triggerAlert(t("syncFailed"), err.message, "error");
     } finally {
       setSaving(false);
     }
   };
 
-  // Option 4 Implementation: Post Daily Memo to Patient's Med Diary
   const handlePostMemo = async () => {
     if (!memoText.trim()) return;
     setPostingMemo(true);
@@ -187,33 +265,26 @@ export default function PatientDetail() {
       const { error } = await supabase.from('doctor_notes').insert({
         user_id: id,
         note_text: memoText,
-        category: 'Instruction', // Labeling as instruction for system clarity
+        category: 'Instruction',
         is_checked: false
       });
-
       if (error) throw error;
-
-      toast({ title: "Memo Sent", description: "Instructions pushed to patient's diary." });
+      triggerAlert(t("memoSent"), t("memoSentDesc"), "success");
       setMemoText("");
       fetchData();
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Failed to send memo", description: err.message });
+      triggerAlert(t("memoFailed"), err.message, "error");
     } finally {
       setPostingMemo(false);
     }
   };
 
   const handleGenerateProtocol = async () => {
-    if (!startDate) {
-      toast({ variant: "destructive", title: "Start Date Required" });
-      return;
-    }
-
+    if (!startDate) { triggerAlert(t("error"), "Start Date Required", "error"); return; }
     setGenerating(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const start = new Date(startDate);
-
       const addDays = (date: Date, days: number) => {
         const result = new Date(date);
         result.setDate(result.getDate() + days);
@@ -226,20 +297,11 @@ export default function PatientDetail() {
         { patient_id: id, doctor_id: user?.id, title: "Final Sputum & Cure Assessment", location: "TB DOTS Clinic", appointment_date: addDays(start, 180), status: "pending", type: "protocol" }
       ];
 
-      const { error } = await supabase.from('roadmap').insert(protocolMilestones);
-      if (error) throw error;
-
-      createAuditLog(
-        "TB Protocol Milestones Generated", 
-        "Reports", 
-        patient?.full_name, 
-        { milestones_count: protocolMilestones.length, clinical_standard: "DOH 6-Month" }
-      );
-
-      toast({ title: "Protocol Generated" });
+      await supabase.from('roadmap').insert(protocolMilestones);
+      triggerAlert(t("success"), t("protocolGenerated"), "success");
       fetchData();
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Generation Failed", description: err.message });
+      triggerAlert(t("error"), err.message, "error");
     } finally {
       setGenerating(false);
     }
@@ -247,10 +309,9 @@ export default function PatientDetail() {
 
   const handleAddPrescription = async () => {
     if (!newMed.name || !newMed.dosage || !newMed.time || !newMed.start || !newMed.end) {
-      toast({ variant: "destructive", title: "Missing Fields" });
+      triggerAlert(t("error"), t("missingFields"), "error");
       return;
     }
-    
     let formattedTime = newMed.time;
     if (newMed.time.includes(":")) {
       const [h, m] = newMed.time.split(":");
@@ -262,7 +323,7 @@ export default function PatientDetail() {
 
     setPrescribing(true);
     try {
-      const { error } = await supabase.from('medications').insert({
+      await supabase.from('medications').insert({
         user_id: id,
         name: newMed.name,
         dosage: newMed.dosage,
@@ -271,60 +332,39 @@ export default function PatientDetail() {
         end_date: newMed.end,
         is_taken: false
       });
-
-      if (error) throw error;
-      
-      createAuditLog(
-        "New Medication Prescribed", 
-        "Patient Access", 
-        patient?.full_name, 
-        { medication: newMed.name, dosage: newMed.dosage }
-      );
-
-      toast({ title: "Prescription Added" });
+      triggerAlert(t("success"), t("prescriptionAdded"), "success");
       setNewMed({ name: "", dosage: "", time: "08:00", start: "", end: "" });
       fetchData();
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err.message });
+      triggerAlert(t("error"), err.message, "error");
     } finally {
       setPrescribing(false);
     }
   };
 
   const handleDeletePrescription = async (medId: number) => {
-    const medToDelete = meds.find(m => m.id === medId);
     try {
-      const { error } = await supabase.from('medications').delete().eq('id', medId);
-      if (error) throw error;
-
-      createAuditLog(
-        "Prescription Removed", 
-        "Patient Access", 
-        patient?.full_name, 
-        { medication: medToDelete?.name || "Unknown" },
-        'danger'
-      );
-
-      toast({ title: "Prescription Removed" });
+      await supabase.from('medications').delete().eq('id', medId);
+      triggerAlert(t("success"), t("prescriptionRemoved"), "success");
       fetchData();
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err.message });
+      triggerAlert(t("error"), err.message, "error");
     }
   };
 
   const handleCompleteAppointment = async (apptId: number) => {
     try {
       await supabase.from('roadmap').update({ status: 'completed' }).eq('id', apptId);
-      toast({ title: "Milestone Completed" });
+      triggerAlert(t("success"), t("milestoneCompleted"), "success");
       fetchData();
-    } catch (err) { console.error(err); }
+    } catch (err: any) { console.error(err); }
   };
 
   const handleCheckNote = async (noteId: number) => {
     try {
       await supabase.from('doctor_notes').update({ is_checked: true }).eq('id', noteId);
       fetchData();
-    } catch (err) { console.error(err); }
+    } catch (err: any) { console.error(err); }
   };
 
   if (loading) return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-[#606C38]" /></div>;
@@ -335,7 +375,7 @@ export default function PatientDetail() {
 
   let timeProgress = 0;
   let daysLeft = 0;
-  let phase = "Not Started"; // Option 5 logic
+  let phase = t("notStarted");
   
   if (startDate && endDate) {
     const start = new Date(startDate);
@@ -345,33 +385,42 @@ export default function PatientDetail() {
     const elapsed = Math.ceil((today.getTime() - start.getTime()) / (1000 * 3600 * 24));
     timeProgress = Math.min(Math.max((elapsed / totalDuration) * 100, 0), 100);
     daysLeft = Math.max(totalDuration - elapsed, 0);
-    
-    // Option 5: Treatment Phase Calculation
-    phase = elapsed <= 60 ? "Intensive Phase" : "Continuation Phase";
+    phase = elapsed <= 60 ? t("intensivePhase") : t("continuationPhase");
   }
 
   const isVerified = patient?.status === 'active';
 
   return (
     <DashboardLayout role="doctor" userName="Doctor">
+      
+      {/* Centralized Notification Pop-up */}
+      <Dialog open={alert.open} onOpenChange={(open) => setAlert({...alert, open})}>
+        <DialogContent className="sm:max-w-[400px] rounded-2xl p-6 text-center animate-in fade-in zoom-in-95 duration-200 bg-white border-slate-200 shadow-xl font-sans">
+          <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${alert.type === 'success' ? 'bg-green-100' : 'bg-red-100'}`}>
+            {alert.type === 'success' ? <CheckCircle className="h-6 w-6 text-green-600" /> : <AlertCircle className="h-6 w-6 text-red-600" />}
+          </div>
+          <h2 className="text-lg font-bold text-slate-900">{alert.title}</h2>
+          <p className="text-slate-500 mt-2 text-sm">{alert.message}</p>
+          <Button className="mt-6 w-full rounded-xl bg-[#606C38] hover:bg-[#2D3B1E] text-white" onClick={() => setAlert({...alert, open: false})}>Okay</Button>
+        </DialogContent>
+      </Dialog>
+
       <div className="space-y-6 animate-fade-in pb-10">
         <Button variant="ghost" onClick={() => navigate(-1)} className="gap-2 text-[#606C38] hover:bg-[#FEFAE0]">
-          <ArrowLeft className="h-4 w-4" /> Back to Patient List
+          <ArrowLeft className="h-4 w-4" /> {t("backBtn")}
         </Button>
 
         <div className="grid gap-6 md:grid-cols-3">
-          
           <div className="space-y-6 md:col-span-1">
             <Card className="border-t-4 border-t-[#606C38] shadow-sm">
-              <CardHeader><CardTitle className="text-[#2D3B1E]">Patient Info</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-[#2D3B1E]">{t("patientInfo")}</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label className="text-muted-foreground text-xs uppercase tracking-wider">Full Name</Label>
+                  <Label className="text-muted-foreground text-xs uppercase tracking-wider">{t("fullName")}</Label>
                   <p className="text-lg font-bold text-[#2D3B1E]">{patient?.full_name}</p>
                 </div>
-                {/* Option 5 UI: Current Phase Indicator */}
                 <div>
-                  <Label className="text-muted-foreground text-xs uppercase tracking-wider">Treatment Phase</Label>
+                  <Label className="text-muted-foreground text-xs uppercase tracking-wider">{t("treatmentPhase")}</Label>
                   <div className="pt-1">
                     <Badge variant="outline" className="bg-[#FEFAE0] text-[#606C38] border-[#DDE5B6] font-bold">
                       {phase}
@@ -379,26 +428,25 @@ export default function PatientDetail() {
                   </div>
                 </div>
                 <div>
-                  <Label className="text-muted-foreground text-xs uppercase tracking-wider">Account Status</Label>
+                  <Label className="text-muted-foreground text-xs uppercase tracking-wider">{t("accountStatus")}</Label>
                   <div className="pt-1">
                     <Badge variant={isVerified ? "default" : "outline"} className={isVerified ? "bg-[#606C38]" : "text-amber-600 border-amber-200 bg-amber-50"}>
-                      {isVerified ? "Verified Patient" : "Pending Verification"}
+                      {isVerified ? t("verifiedPatient") : t("pendingVerification")}
                     </Badge>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2 pt-2">
-                  {patient?.is_symptomatic && <Badge variant="outline" className="border-red-200 text-red-600 bg-red-50">Symptomatic</Badge>}
-                  {patient?.is_close_contact && <Badge variant="outline" className="border-blue-200 text-blue-600 bg-blue-50">Close Contact</Badge>}
+                  {patient?.is_symptomatic && <Badge variant="outline" className="border-red-200 text-red-600 bg-red-50">{t("symptomatic")}</Badge>}
+                  {patient?.is_close_contact && <Badge variant="outline" className="border-blue-200 text-blue-600 bg-blue-50">{t("closeContact")}</Badge>}
                 </div>
               </CardContent>
             </Card>
 
-            {/* Option 4 UI: Post Daily Memo Card */}
             <Card className="shadow-sm border-[#DDE5B6] border-l-4 border-l-blue-400">
-              <CardHeader><CardTitle className="flex items-center gap-2 text-sm text-[#2D3B1E]"><Stethoscope className="h-4 w-4 text-blue-500" /> Daily Protocol Memo</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="flex items-center gap-2 text-sm text-[#2D3B1E]"><Stethoscope className="h-4 w-4 text-blue-500" /> {t("protocolMemo")}</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <Textarea 
-                  placeholder="Type specific instructions for today's medication intake..." 
+                  placeholder={t("memoPlaceholder")} 
                   className="text-xs resize-none bg-slate-50 border-slate-200 h-20"
                   value={memoText}
                   onChange={(e) => setMemoText(e.target.value)}
@@ -409,17 +457,16 @@ export default function PatientDetail() {
                   className="w-full bg-blue-500 hover:bg-blue-600 h-8 text-xs gap-2"
                 >
                   {postingMemo ? <Loader2 className="h-3 w-3 animate-spin" /> : <SendHorizontal className="h-3 w-3" />}
-                  Push Memo to Diary
+                  {t("pushMemo")}
                 </Button>
-                <p className="text-[10px] text-muted-foreground italic">Instructions appear as a high-priority card on the patient's Meds Page.</p>
               </CardContent>
             </Card>
 
             <Card className="shadow-sm border-[#DDE5B6]">
-              <CardHeader><CardTitle className="flex items-center gap-2 text-sm text-[#2D3B1E]"><MessageSquare className="h-4 w-4 text-[#606C38]" /> Patient Reports</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="flex items-center gap-2 text-sm text-[#2D3B1E]"><MessageSquare className="h-4 w-4 text-[#606C38]" /> {t("patientReports")}</CardTitle></CardHeader>
               <CardContent>
                 {notes.filter(n => !n.is_checked && n.category !== 'Instruction').length === 0 ? (
-                  <p className="text-sm text-muted-foreground italic">No reported concerns.</p>
+                  <p className="text-sm text-muted-foreground italic">{t("noConcerns")}</p>
                 ) : (
                   <div className="space-y-3">
                     {notes.filter(n => !n.is_checked && n.category !== 'Instruction').map(note => (
@@ -442,15 +489,15 @@ export default function PatientDetail() {
 
           <div className="space-y-6 md:col-span-2">
             <Card className="border-none shadow-md bg-[#FEFAE0]/50">
-              <CardHeader><CardTitle className="flex items-center gap-2 text-[#2D3B1E]"><Activity className="h-5 w-5 text-[#606C38]" /> Roadmap Configuration</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="flex items-center gap-2 text-[#2D3B1E]"><Activity className="h-5 w-5 text-[#606C38]" /> {t("roadmapConfig")}</CardTitle></CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label className="text-[#2D3B1E] font-semibold">Treatment Start Date</Label>
+                    <Label className="text-[#2D3B1E] font-semibold">{t("startDate")}</Label>
                     <Input type="date" className="bg-white border-[#DDE5B6]" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-[#2D3B1E] font-semibold">Treatment End Date</Label>
+                    <Label className="text-[#2D3B1E] font-semibold">{t("endDate")}</Label>
                     <Input type="date" className="bg-white border-[#DDE5B6]" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
                   </div>
                 </div>
@@ -458,12 +505,11 @@ export default function PatientDetail() {
                 <div className="flex gap-2">
                   <Button onClick={handleSaveTreatment} className="w-full bg-[#606C38] hover:bg-[#2D3B1E] text-white" disabled={saving}>
                     {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                    Save & Sync Dates
+                    {t("saveSync")}
                   </Button>
-                  
                   <Button onClick={handleGenerateProtocol} variant="outline" className="w-full border-[#606C38] text-[#606C38] hover:bg-[#FEFAE0]" disabled={generating || !startDate}>
                     {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4 mr-2" />}
-                    Auto-Generate TB Protocol
+                    {t("autoGen")}
                   </Button>
                 </div>
 
@@ -472,28 +518,24 @@ export default function PatientDetail() {
                     <div className="flex justify-between items-center mb-4">
                       <div className="flex items-center gap-2 text-[#606C38]">
                         <TrendingUp className="h-4 w-4" />
-                        <h4 className="font-bold text-[#2D3B1E]">Real-time Roadmap Progress</h4>
+                        <h4 className="font-bold text-[#2D3B1E]">{t("milestoneProgress")}</h4>
                       </div>
                       <Badge variant="secondary" className="bg-[#FEFAE0] text-[#606C38]">
-                        {daysLeft} days remaining
+                        {daysLeft} {t("daysRemaining")}
                       </Badge>
                     </div>
-
                     <div className="space-y-4">
                       <div>
                         <div className="flex justify-between text-xs mb-1 font-semibold uppercase text-muted-foreground">
-                          <span>Treatment Progress</span>
+                          <span>{t("progressLabel")}</span>
                           <span className="text-[#2D3B1E]">{Math.round(timeProgress)}%</span>
                         </div>
                         <Progress value={timeProgress} className="h-2 bg-slate-100" />
                       </div>
-
                       <div>
                         <div className="flex justify-between text-xs mb-1 font-semibold uppercase text-muted-foreground">
-                          <span>Adherence Rate</span>
-                          <span className={adherenceRate < 80 ? "text-amber-600" : "text-[#606C38]"}>
-                            {Math.round(adherenceRate)}%
-                          </span>
+                          <span>{t("adherenceLabel")}</span>
+                          <span className={adherenceRate < 80 ? "text-amber-600" : "text-[#606C38]"}>{Math.round(adherenceRate)}%</span>
                         </div>
                         <Progress value={adherenceRate} className={`h-2 ${adherenceRate < 80 ? "bg-amber-100" : "bg-[#FEFAE0]"}`} />
                       </div>
@@ -505,12 +547,12 @@ export default function PatientDetail() {
 
             <div className="grid gap-6 sm:grid-cols-2">
               <Card className="shadow-sm border-[#DDE5B6]">
-                <CardHeader><CardTitle className="text-sm font-bold flex items-center gap-2 text-[#2D3B1E]"><CalendarDays className="h-4 w-4 text-[#606C38]" /> Roadmap Milestones</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-sm font-bold flex items-center gap-2 text-[#2D3B1E]"><CalendarDays className="h-4 w-4 text-[#606C38]" /> {t("milestones")}</CardTitle></CardHeader>
                 <CardContent>
                   <Table>
                     <TableBody>
                       {appointments.length === 0 ? (
-                        <TableRow><TableCell className="text-center italic py-6 text-muted-foreground">No milestones.</TableCell></TableRow>
+                        <TableRow><TableCell className="text-center italic py-6 text-muted-foreground">{t("noMilestones")}</TableCell></TableRow>
                       ) : appointments.filter(a => a.status !== 'completed').map((appt) => (
                         <TableRow key={appt.id} className="hover:bg-[#FEFAE0]/30">
                           <TableCell className="py-3 px-2">
@@ -523,7 +565,7 @@ export default function PatientDetail() {
                               </p>
                               {appt.type === 'protocol' && (
                                 <Badge variant="outline" className="ml-2 text-[8px] h-4 px-1 border-[#606C38] text-[#606C38]">
-                                  DOH Protocol
+                                  {t("dohProtocol")}
                                 </Badge>
                               )}
                             </div>
@@ -541,28 +583,23 @@ export default function PatientDetail() {
               </Card>
 
               <Card className="shadow-sm border-[#DDE5B6]">
-                <CardHeader><CardTitle className="text-sm font-bold flex items-center gap-2 text-[#2D3B1E]"><Pill className="h-4 w-4 text-[#606C38]" /> Prescriptions</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-sm font-bold flex items-center gap-2 text-[#2D3B1E]"><Pill className="h-4 w-4 text-[#606C38]" /> {t("prescriptions")}</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
-                  
                   <div className="p-3 bg-[#FEFAE0]/40 rounded-xl border border-[#DDE5B6] space-y-3">
-                    <p className="text-xs font-bold text-[#606C38] uppercase">New Medication</p>
+                    <p className="text-xs font-bold text-[#606C38] uppercase">{t("newMed")}</p>
                     <div className="grid grid-cols-2 gap-2">
-                      <Input placeholder="Meds Name" className="h-8 text-xs bg-white col-span-2" value={newMed.name} onChange={(e) => setNewMed({...newMed, name: e.target.value})} />
-                      <Input placeholder="Dosage (500mg)" className="h-8 text-xs bg-white" value={newMed.dosage} onChange={(e) => setNewMed({...newMed, dosage: e.target.value})} />
+                      <Input placeholder={t("medName")} className="h-8 text-xs bg-white col-span-2" value={newMed.name} onChange={(e) => setNewMed({...newMed, name: e.target.value})} />
+                      <Input placeholder={t("dosage")} className="h-8 text-xs bg-white" value={newMed.dosage} onChange={(e) => setNewMed({...newMed, dosage: e.target.value})} />
                       <Input type="time" className="h-8 text-xs bg-white" value={newMed.time} onChange={(e) => setNewMed({...newMed, time: e.target.value})} />
-                      <div className="col-span-2 grid grid-cols-2 gap-2">
-                        <Input type="date" className="h-8 text-xs bg-white" value={newMed.start} onChange={(e) => setNewMed({...newMed, start: e.target.value})} />
-                        <Input type="date" className="h-8 text-xs bg-white" value={newMed.end} onChange={(e) => setNewMed({...newMed, end: e.target.value})} />
-                      </div>
                     </div>
                     <Button onClick={handleAddPrescription} size="sm" className="w-full h-8 bg-[#606C38]" disabled={prescribing}>
-                      {prescribing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3 mr-1" />} Push to Patient
+                      {prescribing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3 mr-1" />} {t("pushToPatient")}
                     </Button>
                   </div>
 
                   <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                     {meds.length === 0 ? (
-                      <p className="text-center text-xs text-muted-foreground py-4 italic">No active prescriptions.</p>
+                      <p className="text-center text-xs text-muted-foreground py-4 italic">{t("noPrescriptions")}</p>
                     ) : meds.map((med) => (
                       <div key={med.id} className="flex justify-between items-center p-2 rounded-lg bg-white border border-slate-100">
                         <div>
@@ -586,4 +623,4 @@ export default function PatientDetail() {
       </div>
     </DashboardLayout>
   );
-}   
+}
