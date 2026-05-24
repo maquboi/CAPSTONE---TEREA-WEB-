@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 // Global Contexts
 import { LanguageProvider } from "./pages/admin/LanguageContext";
@@ -26,6 +26,7 @@ import ITSupport from "./pages/admin/ITSupport";
 // Doctor Pages
 import DoctorDashboard from "./pages/doctor/Dashboard";
 import AllPatients from "./pages/doctor/AllPatients";
+import PatientTracker from "./pages/doctor/PatientTracker"; 
 import FollowUpTracker from "./pages/doctor/FollowUpTracker";
 import Appointments from "./pages/doctor/Appointments";
 import ActivityLogs from "./pages/doctor/ActivityLogs";
@@ -38,7 +39,6 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      {/* Wrapped the entire app in the LanguageProvider */}
       <LanguageProvider>
         <Toaster />
         <Sonner />
@@ -62,6 +62,7 @@ const App = () => (
             {/* Doctor routes */}
             <Route path="/doctor/dashboard" element={<DoctorDashboard />} />
             <Route path="/doctor/patients" element={<AllPatients />} />
+            <Route path="/doctor/tracker" element={<PatientTracker />} />
             <Route path="/doctor/follow-ups" element={<FollowUpTracker />} />
             <Route path="/doctor/appointments" element={<Appointments />} />
             <Route path="/doctor/activity" element={<ActivityLogs />} />

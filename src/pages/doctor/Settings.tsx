@@ -19,11 +19,11 @@ const translations = {
     notifTitle: "Notifications",
     notifDesc: "Configure notification preferences",
     patientAlerts: "Patient Alerts",
-    patientAlertsDesc: "Get notified about high-risk patient updates",
+    patientAlertsDesc: "Get notified about high-risk patient updates & diary logs",
     apptReminders: "Appointment Reminders",
     apptRemindersDesc: "Receive reminders before appointments",
     followUpAlerts: "Follow-up Alerts",
-    followUpAlertsDesc: "Get notified about overdue follow-ups",
+    followUpAlertsDesc: "Get notified about new patient reports and notes",
     emailNotifs: "Email Notifications",
     emailNotifsDesc: "Receive email summaries",
     displayTitle: "Display",
@@ -48,7 +48,7 @@ const translations = {
     hour1: "1 hour",
     saveBtn: "Save All Settings",
     successTitle: "Settings saved",
-    successDesc: "Your preferences have been updated.",
+    successDesc: "Your preferences have been successfully updated.",
     okBtn: "Okay"
   },
   fil: {
@@ -57,11 +57,11 @@ const translations = {
     notifTitle: "Mga Abiso",
     notifDesc: "I-configure ang mga kagustuhan sa abiso",
     patientAlerts: "Mga Alerto ng Pasyente",
-    patientAlertsDesc: "Maging alerto tungkol sa mga update ng pasyenteng mataas ang panganib",
+    patientAlertsDesc: "Maging alerto tungkol sa diary at mataas na panganib",
     apptReminders: "Mga Paalala sa Appointment",
     apptRemindersDesc: "Makatanggap ng mga paalala bago ang appointment",
     followUpAlerts: "Mga Alerto sa Follow-up",
-    followUpAlertsDesc: "Maging alerto tungkol sa mga huling follow-up",
+    followUpAlertsDesc: "Makatanggap ng abiso sa mga bagong report ng pasyente",
     emailNotifs: "Mga Abiso sa Email",
     emailNotifsDesc: "Makatanggap ng mga buod sa email",
     displayTitle: "Display",
@@ -137,80 +137,87 @@ export default function DoctorSettings() {
   const t = (key: keyof typeof translations.en) => translations[currentLang][key] || translations.en[key];
 
   const handleSave = () => {
+    // 1. Save to local storage
     localStorage.setItem("doctorSystemSettings", JSON.stringify(settings));
+    
+    // 2. Dispatch event to update AppHeader immediately
+    window.dispatchEvent(new Event("settingsUpdated"));
+    
     setLanguage(settings.language as 'en' | 'fil');
     triggerAlert(t("successTitle"), t("successDesc"), "success");
   };
 
   return (
     <DashboardLayout role="doctor" userName={doctorName}>
+      
+      {/* TEREA-Themed Alert Dialog */}
       <Dialog open={alert.open} onOpenChange={(open) => setAlert({...alert, open})}>
         <DialogPortal>
           <DialogOverlay className="bg-black/40 backdrop-blur-sm" />
           <DialogContent className="sm:max-w-[400px] rounded-2xl p-6 text-center animate-in fade-in zoom-in-95 duration-200 bg-white border-slate-200 shadow-xl font-sans">
-            <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${alert.type === 'success' ? 'bg-green-100' : 'bg-red-100'}`}>
-              {alert.type === 'success' ? <CheckCircle className="h-6 w-6 text-green-600" /> : <AlertCircle className="h-6 w-6 text-red-600" />}
+            <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${alert.type === 'success' ? 'bg-[#DDE5B6]' : 'bg-slate-200'}`}>
+              {alert.type === 'success' ? <CheckCircle className="h-6 w-6 text-[#606C38]" /> : <AlertCircle className="h-6 w-6 text-slate-700" />}
             </div>
-            <h2 className="text-lg font-bold text-slate-900">{alert.title}</h2>
-            <p className="text-slate-500 mt-2 text-sm">{alert.message}</p>
-            <Button className="mt-6 w-full rounded-xl bg-[#606C38] hover:bg-[#2D3B1E] text-white" onClick={() => setAlert({...alert, open: false})}>{t("okBtn")}</Button>
+            <h2 className="text-lg font-bold text-black">{alert.title}</h2>
+            <p className="text-slate-600 mt-2 text-sm">{alert.message}</p>
+            <Button className="mt-6 w-full rounded-xl bg-[#606C38] hover:bg-[#283618] text-white" onClick={() => setAlert({...alert, open: false})}>{t("okBtn")}</Button>
           </DialogContent>
         </DialogPortal>
       </Dialog>
 
       <div className="account-page mx-auto max-w-5xl space-y-6">
         <div className="space-y-2">
-          <h1 className="dashboard-title text-2xl font-semibold tracking-tight">{t("pageTitle")}</h1>
-          <p className="dashboard-muted">{t("pageSubtitle")}</p>
+          <h1 className="dashboard-title text-2xl font-bold tracking-tight text-[#283618]">{t("pageTitle")}</h1>
+          <p className="dashboard-muted text-slate-500 font-medium">{t("pageSubtitle")}</p>
         </div>
 
         <div className="space-y-6">
-          <Card className="dashboard-surface rounded-2xl">
-            <CardHeader>
-              <CardTitle className="text-base text-[#2D3B1E]">{t("notifTitle")}</CardTitle>
-              <CardDescription className="text-[#2D3B1E]/65">{t("notifDesc")}</CardDescription>
+          <Card className="dashboard-surface rounded-2xl shadow-sm border border-slate-200">
+            <CardHeader className="pb-3 border-b border-slate-100">
+              <CardTitle className="text-lg font-bold text-[#283618]">{t("notifTitle")}</CardTitle>
+              <CardDescription className="text-slate-500 font-medium">{t("notifDesc")}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-5">
+            <CardContent className="space-y-5 pt-5">
               <div className="flex items-start justify-between gap-6">
-                <div className="space-y-0.5"><Label>{t("patientAlerts")}</Label><p className="text-sm text-[#2D3B1E]/65">{t("patientAlertsDesc")}</p></div>
-                <Switch checked={settings.patientAlerts} onCheckedChange={(v) => update("patientAlerts", v)} />
+                <div className="space-y-0.5"><Label className="font-bold text-[#283618] text-md">{t("patientAlerts")}</Label><p className="text-sm text-slate-500 font-medium">{t("patientAlertsDesc")}</p></div>
+                <Switch checked={settings.patientAlerts} onCheckedChange={(v) => update("patientAlerts", v)} className="data-[state=checked]:bg-[#606C38]" />
               </div>
               <div className="flex items-start justify-between gap-6">
-                <div className="space-y-0.5"><Label>{t("apptReminders")}</Label><p className="text-sm text-[#2D3B1E]/65">{t("apptRemindersDesc")}</p></div>
-                <Switch checked={settings.appointmentReminders} onCheckedChange={(v) => update("appointmentReminders", v)} />
+                <div className="space-y-0.5"><Label className="font-bold text-[#283618] text-md">{t("apptReminders")}</Label><p className="text-sm text-slate-500 font-medium">{t("apptRemindersDesc")}</p></div>
+                <Switch checked={settings.appointmentReminders} onCheckedChange={(v) => update("appointmentReminders", v)} className="data-[state=checked]:bg-[#606C38]" />
               </div>
               <div className="flex items-start justify-between gap-6">
-                <div className="space-y-0.5"><Label>{t("followUpAlerts")}</Label><p className="text-sm text-[#2D3B1E]/65">{t("followUpAlertsDesc")}</p></div>
-                <Switch checked={settings.followUpAlerts} onCheckedChange={(v) => update("followUpAlerts", v)} />
+                <div className="space-y-0.5"><Label className="font-bold text-[#283618] text-md">{t("followUpAlerts")}</Label><p className="text-sm text-slate-500 font-medium">{t("followUpAlertsDesc")}</p></div>
+                <Switch checked={settings.followUpAlerts} onCheckedChange={(v) => update("followUpAlerts", v)} className="data-[state=checked]:bg-[#606C38]" />
               </div>
               <div className="flex items-start justify-between gap-6">
-                <div className="space-y-0.5"><Label>{t("emailNotifs")}</Label><p className="text-sm text-[#2D3B1E]/65">{t("emailNotifsDesc")}</p></div>
-                <Switch checked={settings.emailNotifs} onCheckedChange={(v) => update("emailNotifs", v)} />
+                <div className="space-y-0.5"><Label className="font-bold text-[#283618] text-md">{t("emailNotifs")}</Label><p className="text-sm text-slate-500 font-medium">{t("emailNotifsDesc")}</p></div>
+                <Switch checked={settings.emailNotifs} onCheckedChange={(v) => update("emailNotifs", v)} className="data-[state=checked]:bg-[#606C38]" />
               </div>
             </CardContent>
           </Card>
 
-          <Card className="dashboard-surface rounded-2xl">
-            <CardHeader>
-              <CardTitle className="text-base text-[#2D3B1E]">{t("displayTitle")}</CardTitle>
-              <CardDescription className="text-[#2D3B1E]/65">{t("displayDesc")}</CardDescription>
+          <Card className="dashboard-surface rounded-2xl shadow-sm border border-slate-200">
+            <CardHeader className="pb-3 border-b border-slate-100">
+              <CardTitle className="text-lg font-bold text-[#283618]">{t("displayTitle")}</CardTitle>
+              <CardDescription className="text-slate-500 font-medium">{t("displayDesc")}</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-5 lg:grid-cols-2">
+            <CardContent className="grid gap-5 lg:grid-cols-2 pt-5">
               <div className="space-y-3">
-                <div className="space-y-0.5"><Label>{t("lang")}</Label><p className="text-sm text-[#2D3B1E]/65">{t("langDesc")}</p></div>
+                <div className="space-y-0.5"><Label className="font-bold text-[#283618]">{t("lang")}</Label><p className="text-sm text-slate-500">{t("langDesc")}</p></div>
                 <Select value={settings.language} onValueChange={(v) => update("language", v)}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
+                  <SelectTrigger className="w-full h-11 rounded-xl bg-slate-50 border-slate-200 focus:ring-[#606C38]"><SelectValue /></SelectTrigger>
+                  <SelectContent className="rounded-xl">
                     <SelectItem value="en">English</SelectItem>
                     <SelectItem value="fil">Filipino</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-3">
-                <div className="space-y-0.5"><Label>{t("defaultView")}</Label><p className="text-sm text-[#2D3B1E]/65">{t("defaultViewDesc")}</p></div>
+                <div className="space-y-0.5"><Label className="font-bold text-[#283618]">{t("defaultView")}</Label><p className="text-sm text-slate-500">{t("defaultViewDesc")}</p></div>
                 <Select value={settings.defaultView} onValueChange={(v) => update("defaultView", v)}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
+                  <SelectTrigger className="w-full h-11 rounded-xl bg-slate-50 border-slate-200 focus:ring-[#606C38]"><SelectValue /></SelectTrigger>
+                  <SelectContent className="rounded-xl">
                     <SelectItem value="dashboard">{t("dashboard")}</SelectItem>
                     <SelectItem value="queue">{t("queue")}</SelectItem>
                     <SelectItem value="appointments">{t("appointments")}</SelectItem>
@@ -220,27 +227,27 @@ export default function DoctorSettings() {
             </CardContent>
           </Card>
 
-          <Card className="dashboard-surface rounded-2xl">
-            <CardHeader>
-              <CardTitle className="text-base text-[#2D3B1E]">{t("scheduleTitle")}</CardTitle>
-              <CardDescription className="text-[#2D3B1E]/65">{t("scheduleDesc")}</CardDescription>
+          <Card className="dashboard-surface rounded-2xl shadow-sm border border-slate-200">
+            <CardHeader className="pb-3 border-b border-slate-100">
+              <CardTitle className="text-lg font-bold text-[#283618]">{t("scheduleTitle")}</CardTitle>
+              <CardDescription className="text-slate-500 font-medium">{t("scheduleDesc")}</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-5 lg:grid-cols-2">
+            <CardContent className="grid gap-5 lg:grid-cols-2 pt-5">
               <div className="space-y-3 lg:col-span-2">
-                <div className="space-y-0.5"><Label>{t("workHours")}</Label><p className="text-sm text-[#2D3B1E]/65">{t("workHoursDesc")}</p></div>
-                <div className="flex items-center gap-2">
+                <div className="space-y-0.5"><Label className="font-bold text-[#283618]">{t("workHours")}</Label><p className="text-sm text-slate-500">{t("workHoursDesc")}</p></div>
+                <div className="flex items-center gap-3">
                   <Select value={settings.startHour} onValueChange={(v) => update("startHour", v)}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>
+                    <SelectTrigger className="w-full h-11 rounded-xl bg-slate-50 border-slate-200 focus:ring-[#606C38]"><SelectValue /></SelectTrigger>
+                    <SelectContent className="rounded-xl">
                       <SelectItem value="7am">7:00 AM</SelectItem>
                       <SelectItem value="8am">8:00 AM</SelectItem>
                       <SelectItem value="9am">9:00 AM</SelectItem>
                     </SelectContent>
                   </Select>
-                  <span className="text-[#2D3B1E]/65">{t("to")}</span>
+                  <span className="text-slate-500 font-semibold">{t("to")}</span>
                   <Select value={settings.endHour} onValueChange={(v) => update("endHour", v)}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>
+                    <SelectTrigger className="w-full h-11 rounded-xl bg-slate-50 border-slate-200 focus:ring-[#606C38]"><SelectValue /></SelectTrigger>
+                    <SelectContent className="rounded-xl">
                       <SelectItem value="4pm">4:00 PM</SelectItem>
                       <SelectItem value="5pm">5:00 PM</SelectItem>
                       <SelectItem value="6pm">6:00 PM</SelectItem>
@@ -249,10 +256,10 @@ export default function DoctorSettings() {
                 </div>
               </div>
               <div className="space-y-3 lg:col-span-2">
-                <div className="space-y-0.5"><Label>{t("apptDuration")}</Label><p className="text-sm text-[#2D3B1E]/65">{t("apptDurationDesc")}</p></div>
+                <div className="space-y-0.5"><Label className="font-bold text-[#283618]">{t("apptDuration")}</Label><p className="text-sm text-slate-500">{t("apptDurationDesc")}</p></div>
                 <Select value={settings.duration} onValueChange={(v) => update("duration", v)}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
+                  <SelectTrigger className="w-full h-11 rounded-xl bg-slate-50 border-slate-200 focus:ring-[#606C38]"><SelectValue /></SelectTrigger>
+                  <SelectContent className="rounded-xl">
                     <SelectItem value="15">{t("min15")}</SelectItem>
                     <SelectItem value="30">{t("min30")}</SelectItem>
                     <SelectItem value="45">{t("min45")}</SelectItem>
@@ -263,8 +270,10 @@ export default function DoctorSettings() {
             </CardContent>
           </Card>
 
-          <div className="flex justify-end">
-            <Button onClick={handleSave}>{t("saveBtn")}</Button>
+          <div className="flex justify-end pt-2">
+            <Button onClick={handleSave} className="bg-[#606C38] hover:bg-[#283618] text-white rounded-xl h-11 px-8 font-semibold">
+              {t("saveBtn")}
+            </Button>
           </div>
         </div>
       </div>

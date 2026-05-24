@@ -6,14 +6,14 @@ import { StatCard } from "@/components/ui/stat-card";
 import { RecentActivityCard } from "@/components/dashboard/RecentActivityCard";
 import { useLanguage } from "./LanguageContext";
 import { 
-  Users, AlertTriangle, FileText, Shield, Loader2, ActivitySquare, CheckCircle2, Headset
+  Users, AlertTriangle, FileText, Shield, Loader2, ActivitySquare, CheckCircle2, Headset, Archive
 } from "lucide-react";
 // Import charting components
 import { 
   PieChart, Pie, Cell, Legend, Tooltip as RechartsTooltip, ResponsiveContainer
 } from "recharts";
 
-const PIE_COLORS = ['#ef4444', '#f59e0b', '#10b981', '#94a3b8']; // Red, Amber, Green, Slate
+const PIE_COLORS = ['#ef4444', '#f59e0b', '#10b981', '#94a3b8', '#3b82f6']; // Red, Amber, Green, Slate, Blue (Cured)
 
 export default function AdminDashboard() {
   const { t } = useLanguage();
@@ -29,6 +29,7 @@ export default function AdminDashboard() {
     mediumRiskCases: 0,
     lowRiskCases: 0,
     pendingVerifications: 0,
+    curedCases: 0,
     assessmentsCompleted: 0, 
   });
 
@@ -76,21 +77,25 @@ export default function AdminDashboard() {
       // 1. Fetch Patients & Risk Levels
       const { data: patients, error: patientErr } = await supabase
         .from('profiles')
-        .select('id, risk_level, verification_status')
+        .select('id, risk_level, verification_status, status')
         .eq('role', 'patient');
 
       if (!patientErr && patients) {
         const total = patients.length;
         
-        let high = 0, medium = 0, low = 0, pending = 0;
+        let high = 0, medium = 0, low = 0, pending = 0, curedCount = 0;
 
-        patients.forEach(p => {
-          const risk = p.risk_level?.toLowerCase() || '';
-          if (risk.includes('high')) high++;
-          else if (risk.includes('medium')) medium++;
-          else if (risk.includes('low')) low++;
+        patients.forEach((p: any) => {
+          if (p.status === 'cured') {
+            curedCount++;
+          } else {
+            const risk = p.risk_level?.toLowerCase() || '';
+            if (risk.includes('high')) high++;
+            else if (risk.includes('medium')) medium++;
+            else if (risk.includes('low')) low++;
 
-          if (p.verification_status === 'Pending') pending++;
+            if (p.verification_status === 'Pending') pending++;
+          }
         });
 
         setDashboardStats({
@@ -99,7 +104,8 @@ export default function AdminDashboard() {
           mediumRiskCases: medium,
           lowRiskCases: low,
           pendingVerifications: pending,
-          assessmentsCompleted: total // Assumes all registered patients complete the 12-question assessment
+          curedCases: curedCount,
+          assessmentsCompleted: total 
         });
       }
 
@@ -127,12 +133,13 @@ export default function AdminDashboard() {
 
   if (!isAdmin) return null; 
 
-  // Data for Pie Chart
+  // Data for Pie Chart updated with Archival Cured Metric
   const riskDistributionData = [
-    { name: t("highRiskLabel") || 'High Risk', value: dashboardStats.highRiskCases },
-    { name: t("mediumRiskLabel") || 'Medium Risk', value: dashboardStats.mediumRiskCases },
-    { name: t("lowRiskLabel") || 'Low Risk', value: dashboardStats.lowRiskCases },
-    { name: t("unassessedLabel") || 'Unassessed', value: dashboardStats.totalPatients - (dashboardStats.highRiskCases + dashboardStats.mediumRiskCases + dashboardStats.lowRiskCases) }
+    { name: t("highRiskLabel" as any) || 'High Risk', value: dashboardStats.highRiskCases },
+    { name: t("mediumRiskLabel" as any) || 'Medium Risk', value: dashboardStats.mediumRiskCases },
+    { name: t("lowRiskLabel" as any) || 'Low Risk', value: dashboardStats.lowRiskCases },
+    { name: t("unassessedLabel" as any) || 'Unassessed', value: dashboardStats.totalPatients - (dashboardStats.highRiskCases + dashboardStats.mediumRiskCases + dashboardStats.lowRiskCases + dashboardStats.curedCases) },
+    { name: t("curedLabel" as any) || 'Cured & Archived', value: dashboardStats.curedCases }
   ].filter(d => d.value > 0);
 
   return (
@@ -143,8 +150,8 @@ export default function AdminDashboard() {
           <p className="text-sm text-slate-500 mt-1">{t("dashboardSubtitle")}</p>
         </div>
 
-        {/* Top-Level Metrics - 4 Columns */}
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Top-Level Metrics - 5 Columns */}
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
           <StatCard 
             title={t("totalPatients")} 
             value={dashboardStats.totalPatients.toString()} 
@@ -158,6 +165,12 @@ export default function AdminDashboard() {
             description={t("screenings")} 
             icon={ActivitySquare} 
             trend={{ value: 5, isPositive: true }} 
+          />
+          <StatCard 
+            title={t("curedArchived" as any) || "Cured / Archived"} 
+            value={dashboardStats.curedCases.toString()} 
+            description="Completed Lifecycle" 
+            icon={Archive} 
           />
           <StatCard 
             title={t("pendingVerifications")} 

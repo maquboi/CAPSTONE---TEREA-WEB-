@@ -67,7 +67,8 @@ const doctorNavSections: NavSection[] = [
     title: "Patients",
     items: [
       { title: "Patients", href: "/doctor/patients", icon: Users },
-      { title: "Tracker", href: "/doctor/follow-ups", icon: Activity },
+      { title: "Patient Tracker", href: "/doctor/tracker", icon: Users },
+      { title: "Follow-up Tracker", href: "/doctor/follow-ups", icon: Activity },
     ],
   },
   {
@@ -123,11 +124,6 @@ export function AppSidebar({ role, collapsed, onToggleCollapsed }: AppSidebarPro
           <TooltipTrigger asChild>{content}</TooltipTrigger>
           <TooltipContent side="right" className="flex items-center gap-2">
             {item.title}
-            {item.badge && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs text-primary-foreground">
-                {item.badge}
-              </span>
-            )}
           </TooltipContent>
         </Tooltip>
       );
@@ -143,24 +139,15 @@ export function AppSidebar({ role, collapsed, onToggleCollapsed }: AppSidebarPro
         collapsed ? "w-16" : "w-64"
       )}
     >
-      {/* Edge Collapse Toggle */}
       <button
         onClick={onToggleCollapsed}
         className="absolute -right-3 top-1/2 z-50 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-[#DDE5B6] bg-white text-[#2D3B1E] shadow-sm hover:bg-[#DDE5B6] transition-colors focus:outline-none"
         aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       >
-        {collapsed ? (
-          <ChevronRight className="h-4 w-4" />
-        ) : (
-          <ChevronLeft className="h-4 w-4" />
-        )}
+        {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
       </button>
 
-      {/* Logo */}
-      <div className={cn(
-        "flex h-16 items-center border-b border-[#DDE5B6] px-4",
-        collapsed && "justify-center px-2"
-      )}>
+      <div className={cn("flex h-16 items-center border-b border-[#DDE5B6] px-4", collapsed && "justify-center px-2")}>
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#606C38] shadow-sm">
             <span className="text-lg font-bold text-white">T</span>
@@ -174,7 +161,6 @@ export function AppSidebar({ role, collapsed, onToggleCollapsed }: AppSidebarPro
         </div>
       </div>
 
-      {/* Navigation */}
       <nav className="sidebar-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3">
         {navSections.map((section) => (
           <div key={section.title} className="mb-6">
@@ -192,15 +178,10 @@ export function AppSidebar({ role, collapsed, onToggleCollapsed }: AppSidebarPro
         ))}
       </nav>
 
-      {/* Bottom section */}
       <div className="border-t border-[#DDE5B6] p-3">
         <div className="space-y-1">
-          <NavItemComponent
-            item={{ title: "Profile", href: `/${role}/profile`, icon: UserCircle }}
-          />
-          <NavItemComponent
-            item={{ title: "Settings", href: `/${role}/settings`, icon: Settings }}
-          />
+          <NavItemComponent item={{ title: "Profile", href: `/${role}/profile`, icon: UserCircle }} />
+          <NavItemComponent item={{ title: "Settings", href: `/${role}/settings`, icon: Settings }} />
         </div>
       </div>
     </aside>

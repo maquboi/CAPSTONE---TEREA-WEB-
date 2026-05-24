@@ -34,7 +34,9 @@ import {
   Trash2,
   SendHorizontal,
   Stethoscope,
-  CheckCircle
+  CheckCircle,
+  User,
+  FileCheck2
 } from "lucide-react";
 import { useLanguage } from "../admin/LanguageContext";
 
@@ -47,6 +49,7 @@ const translations: Record<string, Record<string, string>> = {
     accountStatus: "Account Status",
     verifiedPatient: "Verified Patient",
     pendingVerification: "Pending Verification",
+    curedPatient: "Treatment Completed / Cured",
     symptomatic: "Symptomatic",
     closeContact: "Close Contact",
     protocolMemo: "Daily Protocol Memo",
@@ -87,6 +90,9 @@ const translations: Record<string, Record<string, string>> = {
     notStarted: "Not Started",
     intensivePhase: "Intensive Phase",
     continuationPhase: "Continuation Phase",
+    postCarePhase: "Post-Care Archival",
+    dischargeBtn: "Discharge & Generate E-Certificate",
+    dischargeSuccess: "Patient marked as cured. E-Certificate generated and follow-ups scheduled.",
     error: "Error",
     syncFailed: "Sync Failed"
   },
@@ -98,6 +104,7 @@ const translations: Record<string, Record<string, string>> = {
     accountStatus: "Katayuan ng Account",
     verifiedPatient: "Na-verify na Pasyente",
     pendingVerification: "Nakabinbing Pag-verify",
+    curedPatient: "Tapos na ang Gamutan / Magaling na",
     symptomatic: "Symptomatic",
     closeContact: "Close Contact",
     protocolMemo: "Daily Protocol Memo",
@@ -138,6 +145,9 @@ const translations: Record<string, Record<string, string>> = {
     notStarted: "Hindi pa nagsisimula",
     intensivePhase: "Intensive Phase",
     continuationPhase: "Continuation Phase",
+    postCarePhase: "Post-Care Archival",
+    dischargeBtn: "I-discharge at Gumawa ng E-Certificate",
+    dischargeSuccess: "Minarkahang magaling na ang pasyente. Nakaiskedyul na ang follow-ups.",
     error: "Error",
     syncFailed: "Error sa Pag-sync"
   }
@@ -160,6 +170,7 @@ export default function PatientDetail() {
   const [prescribing, setPrescribing] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [postingMemo, setPostingMemo] = useState(false);
+  const [discharging, setDischarging] = useState(false);
   const [patient, setPatient] = useState<any>(null);
   
   const [meds, setMeds] = useState<any[]>([]);
@@ -367,6 +378,42 @@ export default function PatientDetail() {
     } catch (err: any) { console.error(err); }
   };
 
+  const handleDischargePatient = async () => {
+    setDischarging(true);
+    try {
+      // 1. Mark patient as cured
+      await supabase.from('profiles').update({ status: 'cured' }).eq('id', id);
+
+      // 2. Schedule 6-mo and 1-yr Post-Treatment X-Ray Checkups
+      const cureDate = new Date();
+      const in6Months = new Date(cureDate.setMonth(cureDate.getMonth() + 6)).toISOString().split('T')[0];
+      const in1Year = new Date(cureDate.setFullYear(cureDate.getFullYear() + 1)).toISOString().split('T')[0];
+
+      const { data: { user } } = await supabase.auth.getUser();
+
+      await supabase.from('roadmap').insert([
+        { patient_id: id, doctor_id: user?.id, title: "6-Month Post-Treatment X-Ray Follow-up", location: "Carmona Health Center", appointment_date: in6Months, status: "scheduled", type: "post-treatment" },
+        { patient_id: id, doctor_id: user?.id, title: "1-Year Post-Treatment Medical Clearance", location: "Carmona Health Center", appointment_date: in1Year, status: "scheduled", type: "post-treatment" }
+      ]);
+
+      // 3. Log the Admin Archiving Action
+      createAuditLog("Patient Discharged", "Treatment Lifecycle", patient.full_name, { action: "Marked Cured & Scheduled Follow-ups" });
+
+      triggerAlert(t("success"), t("dischargeSuccess"), "success");
+      
+      // 4. Trigger E-Certificate Print Mode natively
+      setTimeout(() => {
+        window.print();
+        fetchData();
+      }, 1500);
+
+    } catch(err: any) {
+      triggerAlert(t("error"), err.message, "error");
+    } finally {
+      setDischarging(false);
+    }
+  };
+
   if (loading) return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-[#606C38]" /></div>;
 
   const totalMeds = meds.length;
@@ -377,7 +424,10 @@ export default function PatientDetail() {
   let daysLeft = 0;
   let phase = t("notStarted");
   
-  if (startDate && endDate) {
+  if (patient?.status === 'cured') {
+    phase = t("postCarePhase");
+    timeProgress = 100;
+  } else if (startDate && endDate) {
     const start = new Date(startDate);
     const end = new Date(endDate);
     const today = new Date();
@@ -388,156 +438,208 @@ export default function PatientDetail() {
     phase = elapsed <= 60 ? t("intensivePhase") : t("continuationPhase");
   }
 
-  const isVerified = patient?.status === 'active';
+  const isVerified = patient?.status === 'active' || patient?.status === 'cured';
+  const isCured = patient?.status === 'cured';
 
   return (
     <DashboardLayout role="doctor" userName="Doctor">
       
       {/* Centralized Notification Pop-up */}
       <Dialog open={alert.open} onOpenChange={(open) => setAlert({...alert, open})}>
-        <DialogContent className="sm:max-w-[400px] rounded-2xl p-6 text-center animate-in fade-in zoom-in-95 duration-200 bg-white border-slate-200 shadow-xl font-sans">
-          <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${alert.type === 'success' ? 'bg-green-100' : 'bg-red-100'}`}>
-            {alert.type === 'success' ? <CheckCircle className="h-6 w-6 text-green-600" /> : <AlertCircle className="h-6 w-6 text-red-600" />}
+        <DialogContent className="sm:max-w-[400px] rounded-2xl p-6 text-center animate-in fade-in zoom-in-95 duration-200 bg-white border-slate-200 shadow-xl font-sans print:hidden">
+          <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${alert.type === 'success' ? 'bg-[#DDE5B6]' : 'bg-slate-200'}`}>
+            {alert.type === 'success' ? <CheckCircle className="h-6 w-6 text-[#606C38]" /> : <AlertCircle className="h-6 w-6 text-slate-700" />}
           </div>
-          <h2 className="text-lg font-bold text-slate-900">{alert.title}</h2>
-          <p className="text-slate-500 mt-2 text-sm">{alert.message}</p>
-          <Button className="mt-6 w-full rounded-xl bg-[#606C38] hover:bg-[#2D3B1E] text-white" onClick={() => setAlert({...alert, open: false})}>Okay</Button>
+          <h2 className="text-lg font-bold text-black">{alert.title}</h2>
+          <p className="text-slate-600 mt-2 text-sm">{alert.message}</p>
+          <Button className="mt-6 w-full rounded-xl bg-[#606C38] hover:bg-[#283618] text-white" onClick={() => setAlert({...alert, open: false})}>Okay</Button>
         </DialogContent>
       </Dialog>
 
-      <div className="space-y-6 animate-fade-in pb-10">
-        <Button variant="ghost" onClick={() => navigate(-1)} className="gap-2 text-[#606C38] hover:bg-[#FEFAE0]">
-          <ArrowLeft className="h-4 w-4" /> {t("backBtn")}
-        </Button>
+      <div className="space-y-6 animate-fade-in pb-10 print:hidden">
+        
+        {/* Header Actions */}
+        <div className="flex items-center justify-between">
+          <Button variant="ghost" onClick={() => navigate(-1)} className="gap-2 text-[#606C38] hover:bg-[#FEFAE0] rounded-xl px-4">
+            <ArrowLeft className="h-4 w-4" /> {t("backBtn")}
+          </Button>
 
-        <div className="grid gap-6 md:grid-cols-3">
-          <div className="space-y-6 md:col-span-1">
-            <Card className="border-t-4 border-t-[#606C38] shadow-sm">
-              <CardHeader><CardTitle className="text-[#2D3B1E]">{t("patientInfo")}</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
+          {!isCured && (
+            <Button 
+              onClick={handleDischargePatient} 
+              disabled={discharging}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl gap-2 font-bold shadow-sm"
+            >
+              {discharging ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCheck2 className="h-4 w-4" />}
+              {t("dischargeBtn")}
+            </Button>
+          )}
+        </div>
+
+        {/* TOP SECTION: Unified Patient Info Header Card */}
+        <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
+          <CardContent className="p-6 sm:p-8 flex flex-col sm:flex-row items-center sm:items-start gap-6 sm:gap-8">
+            
+            <div className="h-28 w-28 rounded-full bg-slate-50 border-4 border-[#DDE5B6] flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+              {patient?.avatar_url ? (
+                <img src={patient.avatar_url} alt={patient.full_name} className="h-full w-full object-cover" />
+              ) : (
+                <User className="h-12 w-12 text-[#606C38]" />
+              )}
+            </div>
+
+            <div className="flex-1 space-y-3 text-center sm:text-left w-full">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <Label className="text-muted-foreground text-xs uppercase tracking-wider">{t("fullName")}</Label>
-                  <p className="text-lg font-bold text-[#2D3B1E]">{patient?.full_name}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground text-xs uppercase tracking-wider">{t("treatmentPhase")}</Label>
-                  <div className="pt-1">
-                    <Badge variant="outline" className="bg-[#FEFAE0] text-[#606C38] border-[#DDE5B6] font-bold">
+                  <h2 className="text-3xl font-bold text-black tracking-tight">{patient?.full_name}</h2>
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mt-2">
+                    <Badge variant={isCured ? "default" : (isVerified ? "default" : "outline")} className={`px-3 py-1 font-semibold ${isCured ? "bg-emerald-600 hover:bg-emerald-700 text-white" : (isVerified ? "bg-[#606C38] hover:bg-[#283618] text-white border-none" : "text-slate-600 border-slate-300 bg-slate-100")}`}>
+                      {isCured ? t("curedPatient") : (isVerified ? t("verifiedPatient") : t("pendingVerification"))}
+                    </Badge>
+                    <Badge variant="outline" className={`font-bold px-3 py-1 ${isCured ? "bg-slate-100 text-slate-600 border-slate-300" : "bg-[#FEFAE0] text-[#606C38] border-[#DDE5B6]"}`}>
                       {phase}
                     </Badge>
                   </div>
                 </div>
-                <div>
-                  <Label className="text-muted-foreground text-xs uppercase tracking-wider">{t("accountStatus")}</Label>
-                  <div className="pt-1">
-                    <Badge variant={isVerified ? "default" : "outline"} className={isVerified ? "bg-[#606C38]" : "text-amber-600 border-amber-200 bg-amber-50"}>
-                      {isVerified ? t("verifiedPatient") : t("pendingVerification")}
-                    </Badge>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2 pt-2">
-                  {patient?.is_symptomatic && <Badge variant="outline" className="border-red-200 text-red-600 bg-red-50">{t("symptomatic")}</Badge>}
-                  {patient?.is_close_contact && <Badge variant="outline" className="border-blue-200 text-blue-600 bg-blue-50">{t("closeContact")}</Badge>}
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+              
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-3 border-t border-slate-100 mt-4">
+                {patient?.is_symptomatic && <Badge variant="outline" className="border-slate-300 text-slate-700 bg-slate-50 px-3 py-1">{t("symptomatic")}</Badge>}
+                {patient?.is_close_contact && <Badge variant="outline" className="border-slate-300 text-slate-700 bg-slate-50 px-3 py-1">{t("closeContact")}</Badge>}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-            <Card className="shadow-sm border-[#DDE5B6] border-l-4 border-l-blue-400">
-              <CardHeader><CardTitle className="flex items-center gap-2 text-sm text-[#2D3B1E]"><Stethoscope className="h-4 w-4 text-blue-500" /> {t("protocolMemo")}</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                <Textarea 
-                  placeholder={t("memoPlaceholder")} 
-                  className="text-xs resize-none bg-slate-50 border-slate-200 h-20"
-                  value={memoText}
-                  onChange={(e) => setMemoText(e.target.value)}
-                />
-                <Button 
-                  onClick={handlePostMemo} 
-                  disabled={postingMemo || !memoText.trim()}
-                  className="w-full bg-blue-500 hover:bg-blue-600 h-8 text-xs gap-2"
-                >
-                  {postingMemo ? <Loader2 className="h-3 w-3 animate-spin" /> : <SendHorizontal className="h-3 w-3" />}
-                  {t("pushMemo")}
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="shadow-sm border-[#DDE5B6]">
-              <CardHeader><CardTitle className="flex items-center gap-2 text-sm text-[#2D3B1E]"><MessageSquare className="h-4 w-4 text-[#606C38]" /> {t("patientReports")}</CardTitle></CardHeader>
-              <CardContent>
+        {/* MAIN GRID LAYOUT */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          
+          {/* LEFT COLUMN: Reports & Memos */}
+          <div className="space-y-6 lg:col-span-1">
+            
+            <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
+              <CardHeader className="pb-3 border-b border-slate-100">
+                <CardTitle className="flex items-center gap-2 text-md text-[#283618] font-bold">
+                  <MessageSquare className="h-5 w-5 text-[#606C38]" /> {t("patientReports")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4">
                 {notes.filter(n => !n.is_checked && n.category !== 'Instruction').length === 0 ? (
-                  <p className="text-sm text-muted-foreground italic">{t("noConcerns")}</p>
+                  <div className="py-6 text-center bg-slate-50 rounded-xl border border-slate-100">
+                    <p className="text-sm text-slate-500 italic">{t("noConcerns")}</p>
+                  </div>
                 ) : (
                   <div className="space-y-3">
                     {notes.filter(n => !n.is_checked && n.category !== 'Instruction').map(note => (
-                      <div key={note.id} className="p-3 border border-[#DDE5B6] rounded-lg bg-[#FEFAE0]/30">
-                        <div className="flex justify-between items-start mb-1">
+                      <div key={note.id} className="p-4 border border-[#DDE5B6] rounded-xl bg-[#FEFAE0]/40">
+                        <div className="flex justify-between items-start mb-2">
                           <Badge variant="outline" className="text-[10px] bg-white text-[#606C38] border-[#DDE5B6]">{note.category}</Badge>
-                          <Button size="icon" variant="ghost" className="h-5 w-5 hover:text-green-600" onClick={() => handleCheckNote(note.id)}>
-                            <Check className="h-3 w-3" />
+                          <Button size="icon" variant="ghost" className="h-6 w-6 text-slate-400 hover:text-[#606C38] hover:bg-white rounded-full" onClick={() => handleCheckNote(note.id)}>
+                            <Check className="h-4 w-4" />
                           </Button>
                         </div>
-                        <p className="text-sm font-medium text-[#2D3B1E]">{note.note_text}</p>
-                        <p className="text-[10px] text-muted-foreground mt-2">{new Date(note.created_at).toLocaleDateString()}</p>
+                        <p className="text-sm font-medium text-black leading-relaxed">{note.note_text}</p>
+                        <p className="text-[11px] text-slate-500 mt-3 font-medium">{new Date(note.created_at).toLocaleDateString()}</p>
                       </div>
                     ))}
                   </div>
                 )}
               </CardContent>
             </Card>
+
+            {!isCured && (
+              <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
+                <CardHeader className="pb-3 border-b border-slate-100">
+                  <CardTitle className="flex items-center gap-2 text-md text-[#283618] font-bold">
+                    <Stethoscope className="h-5 w-5 text-[#606C38]" /> {t("protocolMemo")}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-4">
+                  <Textarea 
+                    placeholder={t("memoPlaceholder")} 
+                    className="text-sm resize-none bg-slate-50 border-slate-200 h-28 rounded-xl focus-visible:ring-[#606C38]"
+                    value={memoText}
+                    onChange={(e) => setMemoText(e.target.value)}
+                  />
+                  <Button 
+                    onClick={handlePostMemo} 
+                    disabled={postingMemo || !memoText.trim()}
+                    className="w-full bg-[#606C38] hover:bg-[#283618] text-white rounded-xl h-11 gap-2 font-semibold"
+                  >
+                    {postingMemo ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
+                    {t("pushMemo")}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
           </div>
 
-          <div className="space-y-6 md:col-span-2">
-            <Card className="border-none shadow-md bg-[#FEFAE0]/50">
-              <CardHeader><CardTitle className="flex items-center gap-2 text-[#2D3B1E]"><Activity className="h-5 w-5 text-[#606C38]" /> {t("roadmapConfig")}</CardTitle></CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label className="text-[#2D3B1E] font-semibold">{t("startDate")}</Label>
-                    <Input type="date" className="bg-white border-[#DDE5B6]" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-[#2D3B1E] font-semibold">{t("endDate")}</Label>
-                    <Input type="date" className="bg-white border-[#DDE5B6]" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-                  </div>
-                </div>
+          {/* RIGHT COLUMN: Config, Milestones, Prescriptions */}
+          <div className="space-y-6 lg:col-span-2">
+            
+            {/* Roadmap Configuration (Full Width of Col 2) */}
+            <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
+              <CardHeader className="pb-3 border-b border-slate-100">
+                <CardTitle className="flex items-center gap-2 text-lg text-[#283618] font-bold">
+                  <Activity className="h-5 w-5 text-[#606C38]" /> {t("roadmapConfig")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-5 space-y-6">
                 
-                <div className="flex gap-2">
-                  <Button onClick={handleSaveTreatment} className="w-full bg-[#606C38] hover:bg-[#2D3B1E] text-white" disabled={saving}>
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                    {t("saveSync")}
-                  </Button>
-                  <Button onClick={handleGenerateProtocol} variant="outline" className="w-full border-[#606C38] text-[#606C38] hover:bg-[#FEFAE0]" disabled={generating || !startDate}>
-                    {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4 mr-2" />}
-                    {t("autoGen")}
-                  </Button>
-                </div>
+                {!isCured && (
+                  <>
+                    <div className="grid gap-5 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label className="text-black font-bold">{t("startDate")}</Label>
+                        <Input type="date" className="bg-slate-50 border-slate-200 rounded-xl h-11 focus-visible:ring-[#606C38]" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-black font-bold">{t("endDate")}</Label>
+                        <Input type="date" className="bg-slate-50 border-slate-200 rounded-xl h-11 focus-visible:ring-[#606C38]" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <Button onClick={handleSaveTreatment} className="w-full sm:w-1/2 bg-[#283618] hover:bg-[#1a2310] text-white rounded-xl h-11 font-semibold" disabled={saving}>
+                        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                        {t("saveSync")}
+                      </Button>
+                      <Button onClick={handleGenerateProtocol} variant="outline" className="w-full sm:w-1/2 border-[#606C38] text-[#606C38] hover:bg-[#FEFAE0] rounded-xl h-11 font-semibold" disabled={generating || !startDate}>
+                        {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4 mr-2" />}
+                        {t("autoGen")}
+                      </Button>
+                    </div>
+                  </>
+                )}
 
                 {startDate && endDate && (
-                  <div className="mt-4 p-5 rounded-2xl bg-white border border-[#DDE5B6] shadow-sm">
-                    <div className="flex justify-between items-center mb-4">
+                  <div className={`mt-2 p-5 rounded-2xl border ${isCured ? 'bg-emerald-50 border-emerald-200' : 'bg-[#FEFAE0]/30 border-[#DDE5B6]'}`}>
+                    <div className="flex justify-between items-center mb-5">
                       <div className="flex items-center gap-2 text-[#606C38]">
-                        <TrendingUp className="h-4 w-4" />
-                        <h4 className="font-bold text-[#2D3B1E]">{t("milestoneProgress")}</h4>
+                        <TrendingUp className={`h-5 w-5 ${isCured ? 'text-emerald-600' : 'text-[#606C38]'}`} />
+                        <h4 className={`font-bold text-md ${isCured ? 'text-emerald-900' : 'text-[#283618]'}`}>{t("milestoneProgress")}</h4>
                       </div>
-                      <Badge variant="secondary" className="bg-[#FEFAE0] text-[#606C38]">
-                        {daysLeft} {t("daysRemaining")}
-                      </Badge>
+                      {!isCured && (
+                        <Badge variant="secondary" className="bg-[#DDE5B6] text-[#283618] px-3 py-1 font-bold">
+                          {daysLeft} {t("daysRemaining")}
+                        </Badge>
+                      )}
                     </div>
-                    <div className="space-y-4">
+                    <div className="space-y-5">
                       <div>
-                        <div className="flex justify-between text-xs mb-1 font-semibold uppercase text-muted-foreground">
+                        <div className="flex justify-between text-xs mb-2 font-bold uppercase text-slate-500">
                           <span>{t("progressLabel")}</span>
-                          <span className="text-[#2D3B1E]">{Math.round(timeProgress)}%</span>
+                          <span className="text-black">{Math.round(timeProgress)}%</span>
                         </div>
-                        <Progress value={timeProgress} className="h-2 bg-slate-100" />
+                        <Progress value={timeProgress} className={`h-2.5 bg-slate-200 rounded-full [&>div]:${isCured ? 'bg-emerald-500' : 'bg-[#606C38]'}`} />
                       </div>
                       <div>
-                        <div className="flex justify-between text-xs mb-1 font-semibold uppercase text-muted-foreground">
+                        <div className="flex justify-between text-xs mb-2 font-bold uppercase text-slate-500">
                           <span>{t("adherenceLabel")}</span>
-                          <span className={adherenceRate < 80 ? "text-amber-600" : "text-[#606C38]"}>{Math.round(adherenceRate)}%</span>
+                          <span className={adherenceRate < 80 ? "text-slate-700" : (isCured ? "text-emerald-600" : "text-[#606C38]")}>{Math.round(adherenceRate)}%</span>
                         </div>
-                        <Progress value={adherenceRate} className={`h-2 ${adherenceRate < 80 ? "bg-amber-100" : "bg-[#FEFAE0]"}`} />
+                        <Progress value={adherenceRate} className={`h-2.5 rounded-full ${adherenceRate < 80 ? "bg-slate-200 [&>div]:bg-slate-600" : `bg-slate-200 [&>div]:${isCured ? 'bg-emerald-500' : 'bg-[#606C38]'}`}`} />
                       </div>
                     </div>
                   </div>
@@ -545,78 +647,166 @@ export default function PatientDetail() {
               </CardContent>
             </Card>
 
+            {/* Nested Grid for Milestones and Prescriptions */}
             <div className="grid gap-6 sm:grid-cols-2">
-              <Card className="shadow-sm border-[#DDE5B6]">
-                <CardHeader><CardTitle className="text-sm font-bold flex items-center gap-2 text-[#2D3B1E]"><CalendarDays className="h-4 w-4 text-[#606C38]" /> {t("milestones")}</CardTitle></CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableBody>
-                      {appointments.length === 0 ? (
-                        <TableRow><TableCell className="text-center italic py-6 text-muted-foreground">{t("noMilestones")}</TableCell></TableRow>
-                      ) : appointments.filter(a => a.status !== 'completed').map((appt) => (
-                        <TableRow key={appt.id} className="hover:bg-[#FEFAE0]/30">
-                          <TableCell className="py-3 px-2">
-                            <p className="text-sm font-bold text-[#2D3B1E]">
-                              {appt.title || 'Follow-up'}
-                            </p>
-                            <div className="flex items-center mt-1">
-                              <p className="text-[10px] text-muted-foreground">
-                                {new Date(appt.appointment_date).toLocaleDateString()} • {appt.location}
+              
+              {/* Milestones Card */}
+              <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white flex flex-col">
+                <CardHeader className="pb-3 border-b border-slate-100">
+                  <CardTitle className="text-md font-bold flex items-center gap-2 text-[#283618]">
+                    <CalendarDays className="h-5 w-5 text-[#606C38]" /> {t("milestones")}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="flex-1 p-0 overflow-hidden">
+                  <div className="max-h-[350px] overflow-y-auto">
+                    <Table>
+                      <TableBody>
+                        {appointments.length === 0 ? (
+                          <TableRow>
+                            <TableCell className="text-center italic py-10 text-slate-400">{t("noMilestones")}</TableCell>
+                          </TableRow>
+                        ) : appointments.filter(a => a.status !== 'completed').map((appt) => (
+                          <TableRow key={appt.id} className="hover:bg-slate-50 border-b border-slate-100">
+                            <TableCell className="py-4 px-5">
+                              <p className="text-sm font-bold text-black mb-1">
+                                {appt.title || 'Follow-up'}
                               </p>
-                              {appt.type === 'protocol' && (
-                                <Badge variant="outline" className="ml-2 text-[8px] h-4 px-1 border-[#606C38] text-[#606C38]">
-                                  {t("dohProtocol")}
-                                </Badge>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right py-3 px-2">
-                            <Button size="sm" variant="ghost" className="h-8 text-[#606C38]" onClick={() => handleCompleteAppointment(appt.id)}>
-                              <CheckCircle2 className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-[11px] font-medium text-slate-500">
+                                  {new Date(appt.appointment_date).toLocaleDateString()} • {appt.location}
+                                </p>
+                                {appt.type === 'protocol' && (
+                                  <Badge variant="outline" className="text-[9px] h-5 px-2 border-[#DDE5B6] bg-[#FEFAE0] text-[#606C38]">
+                                    {t("dohProtocol")}
+                                  </Badge>
+                                )}
+                                {appt.type === 'post-treatment' && (
+                                  <Badge variant="outline" className="text-[9px] h-5 px-2 border-emerald-200 bg-emerald-50 text-emerald-700">
+                                    Post-Treatment
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right py-4 px-5">
+                              <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-300 hover:text-[#606C38] hover:bg-[#FEFAE0] rounded-full" onClick={() => handleCompleteAppointment(appt.id)}>
+                                <CheckCircle2 className="h-5 w-5" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </CardContent>
               </Card>
 
-              <Card className="shadow-sm border-[#DDE5B6]">
-                <CardHeader><CardTitle className="text-sm font-bold flex items-center gap-2 text-[#2D3B1E]"><Pill className="h-4 w-4 text-[#606C38]" /> {t("prescriptions")}</CardTitle></CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="p-3 bg-[#FEFAE0]/40 rounded-xl border border-[#DDE5B6] space-y-3">
-                    <p className="text-xs font-bold text-[#606C38] uppercase">{t("newMed")}</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Input placeholder={t("medName")} className="h-8 text-xs bg-white col-span-2" value={newMed.name} onChange={(e) => setNewMed({...newMed, name: e.target.value})} />
-                      <Input placeholder={t("dosage")} className="h-8 text-xs bg-white" value={newMed.dosage} onChange={(e) => setNewMed({...newMed, dosage: e.target.value})} />
-                      <Input type="time" className="h-8 text-xs bg-white" value={newMed.time} onChange={(e) => setNewMed({...newMed, time: e.target.value})} />
+              {/* Prescriptions Card */}
+              <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white flex flex-col">
+                <CardHeader className="pb-3 border-b border-slate-100">
+                  <CardTitle className="text-md font-bold flex items-center gap-2 text-[#283618]">
+                    <Pill className="h-5 w-5 text-[#606C38]" /> {t("prescriptions")}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="flex-1 p-4 space-y-5">
+                  {!isCured && (
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t("newMed")}</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Input placeholder={t("medName")} className="h-10 text-sm bg-white border-slate-200 rounded-lg col-span-2 focus-visible:ring-[#606C38]" value={newMed.name} onChange={(e) => setNewMed({...newMed, name: e.target.value})} />
+                        <Input placeholder={t("dosage")} className="h-10 text-sm bg-white border-slate-200 rounded-lg focus-visible:ring-[#606C38]" value={newMed.dosage} onChange={(e) => setNewMed({...newMed, dosage: e.target.value})} />
+                        <Input type="time" className="h-10 text-sm bg-white border-slate-200 rounded-lg focus-visible:ring-[#606C38]" value={newMed.time} onChange={(e) => setNewMed({...newMed, time: e.target.value})} />
+                      </div>
+                      <Button onClick={handleAddPrescription} size="sm" className="w-full h-10 bg-[#606C38] hover:bg-[#283618] rounded-lg text-white font-medium" disabled={prescribing}>
+                        {prescribing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />} {t("pushToPatient")}
+                      </Button>
                     </div>
-                    <Button onClick={handleAddPrescription} size="sm" className="w-full h-8 bg-[#606C38]" disabled={prescribing}>
-                      {prescribing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3 mr-1" />} {t("pushToPatient")}
-                    </Button>
-                  </div>
+                  )}
 
-                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  <div className="space-y-3 max-h-[180px] overflow-y-auto pr-1">
                     {meds.length === 0 ? (
-                      <p className="text-center text-xs text-muted-foreground py-4 italic">{t("noPrescriptions")}</p>
+                      <p className="text-center text-sm text-slate-400 py-6 italic">{t("noPrescriptions")}</p>
                     ) : meds.map((med) => (
-                      <div key={med.id} className="flex justify-between items-center p-2 rounded-lg bg-white border border-slate-100">
+                      <div key={med.id} className={`flex justify-between items-center p-3 rounded-xl border shadow-sm ${isCured ? 'bg-slate-50 border-slate-100' : 'bg-white border-slate-200'}`}>
                         <div>
-                          <p className="text-xs font-bold text-[#2D3B1E]">{med.name} <span className="font-normal text-muted-foreground">({med.dosage})</span></p>
-                          <p className="text-[10px] text-muted-foreground">{new Date(med.start_date).toLocaleDateString()} - {new Date(med.end_date).toLocaleDateString()} • {med.time}</p>
+                          <p className="text-sm font-bold text-black mb-1">{med.name} <span className="font-medium text-slate-500">({med.dosage})</span></p>
+                          <p className="text-[11px] font-medium text-slate-400">{new Date(med.start_date).toLocaleDateString()} - {new Date(med.end_date).toLocaleDateString()} • {med.time}</p>
                         </div>
                         <div className="flex items-center gap-1">
-                          {med.is_taken ? <Check className="h-4 w-4 text-[#606C38] mr-1" /> : <Circle className="h-4 w-4 text-slate-300 mr-1" />}
-                          <Button size="icon" variant="ghost" className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50" onClick={() => handleDeletePrescription(med.id)}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          {med.is_taken ? <Check className="h-5 w-5 text-[#606C38] mr-2" /> : <Circle className="h-5 w-5 text-slate-300 mr-2" />}
+                          {!isCured && (
+                            <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-black hover:bg-slate-100 rounded-full" onClick={() => handleDeletePrescription(med.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     ))}
                   </div>
                 </CardContent>
               </Card>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* --- HIDDEN E-DISCHARGE CERTIFICATE (VISIBLE ONLY WHEN PRINTING) --- */}
+      <div className="hidden print:block font-sans text-black p-10 bg-white h-screen">
+        <div className="flex items-center justify-between border-b-2 border-slate-800 pb-6 mb-8">
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight">MUNICIPALITY OF CARMONA</h1>
+            <h2 className="text-xl font-bold text-slate-600 mt-1">TB DOTS CLINIC</h2>
+          </div>
+          <div className="text-right">
+            <h1 className="text-3xl font-extrabold tracking-tight">TEREA</h1>
+            <p className="text-sm font-bold text-slate-500">E-DISCHARGE CERTIFICATE</p>
+          </div>
+        </div>
+
+        <div className="space-y-8">
+          <p className="text-lg leading-relaxed text-justify">
+            This is to certify that <strong>{patient?.full_name?.toUpperCase()}</strong>, a resident of Barangay {patient?.barangay || "Carmona"}, has successfully completed the required 6-month Directly Observed Treatment, Short-course (DOTS) regimen under the supervision of the Carmona Health Center.
+          </p>
+
+          <div className="grid grid-cols-2 gap-y-6 text-md bg-slate-50 p-6 rounded-lg border border-slate-200">
+            <div>
+              <span className="font-bold text-slate-500 block text-xs">PATIENT ID</span>
+              <span className="font-semibold">{patient?.id?.substring(0, 8).toUpperCase()}</span>
+            </div>
+            <div>
+              <span className="font-bold text-slate-500 block text-xs">CLINIC CODE</span>
+              <span className="font-semibold">{patient?.clinic_code || "N/A"}</span>
+            </div>
+            <div>
+              <span className="font-bold text-slate-500 block text-xs">TREATMENT START</span>
+              <span className="font-semibold">{startDate ? new Date(startDate).toLocaleDateString() : "N/A"}</span>
+            </div>
+            <div>
+              <span className="font-bold text-slate-500 block text-xs">TREATMENT END</span>
+              <span className="font-semibold">{endDate ? new Date(endDate).toLocaleDateString() : "N/A"}</span>
+            </div>
+            <div>
+              <span className="font-bold text-slate-500 block text-xs">FINAL STATUS</span>
+              <span className="font-extrabold text-emerald-700 uppercase">Cured / Completed</span>
+            </div>
+            <div>
+              <span className="font-bold text-slate-500 block text-xs">ADHERENCE RATE</span>
+              <span className="font-semibold">{Math.round(adherenceRate)}%</span>
+            </div>
+          </div>
+
+          <p className="text-md italic text-slate-600 pt-4">
+            The patient is hereby declared cleared of active Tuberculosis infection and is advised to return for the scheduled 6-month and 1-year post-treatment follow-ups as registered in their digital roadmap.
+          </p>
+
+          <div className="pt-20 flex justify-between items-end">
+            <div>
+              <p className="text-xs text-slate-400">Date Generated</p>
+              <p className="font-bold">{new Date().toLocaleDateString()}</p>
+            </div>
+            <div className="text-center w-64 border-t border-slate-800 pt-2">
+              <p className="font-bold uppercase">Attending Physician</p>
+              <p className="text-sm text-slate-500">Carmona TB DOTS Center</p>
             </div>
           </div>
         </div>

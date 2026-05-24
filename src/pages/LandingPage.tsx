@@ -36,16 +36,27 @@ const steps = [
   "The system automatically tracks patient medication adherence over the 6-month period.",
 ];
 
+const carouselImages = [
+  '/CarmonaStreets.jpg',
+  '/CarmonaPlace.jpg',
+  '/CityHallCarmona.jpg'
+];
+
 export default function LandingPage() {
   const navigate = useNavigate();
   const [parallaxY, setParallaxY] = useState(0);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   useEffect(() => {
-    let ticking = false;
+    // Carousel Interval
+    const interval = setInterval(() => {
+      setCurrentImageIndex((prev) => (prev + 1) % carouselImages.length);
+    }, 5000);
 
+    // Parallax Effect
+    let ticking = false;
     const onScroll = () => {
       if (ticking) return;
-
       ticking = true;
       window.requestAnimationFrame(() => {
         setParallaxY(Math.min(window.scrollY * 0.06, 26));
@@ -57,6 +68,7 @@ export default function LandingPage() {
 
     return () => {
       window.removeEventListener("scroll", onScroll);
+      clearInterval(interval);
     };
   }, []);
 
@@ -70,10 +82,7 @@ export default function LandingPage() {
       {/* Nav */}
       <header className="sticky top-0 z-50 border-b border-[#606C38]/15 bg-white/90 backdrop-blur-xl shadow-[0_8px_30px_rgba(45,59,30,0.06)]">
         <div className="flex h-16 w-full items-center justify-between px-6 sm:px-10">
-          <div className="flex items-center gap-3">
-            <div className="logo-badge flex h-9 w-9 items-center justify-center rounded-xl bg-[#606C38] shadow-sm">
-              <span className="text-lg font-bold text-white">T</span>
-            </div>
+          <div className="flex items-center">
             <span className="text-xl font-extrabold tracking-tight text-[#2D3B1E]">TEREA</span>
           </div>
           
@@ -87,51 +96,43 @@ export default function LandingPage() {
       </header>
 
       {/* Hero Section */}
-      <div 
-        className="relative bg-cover bg-center"
-        style={{
-          backgroundImage: "url('https://images.unsplash.com/photo-1538108149393-fbbd81895907?q=80&w=2000&auto=format&fit=crop')",
-        }}
-      >
-        <div className="absolute inset-0 bg-gradient-to-br from-white/95 via-[#DDE5B6]/50 to-white/95 backdrop-blur-[4px]"></div>
+      <div className="relative overflow-hidden">
+        {/* Carousel Background Layer */}
+        <div 
+          className="absolute inset-0 bg-cover bg-center blur-[3px] scale-105 transition-all duration-1000 ease-in-out"
+          style={{
+            backgroundImage: `url('${carouselImages[currentImageIndex]}')`,
+          }}
+        ></div>
+        {/* Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-white/95 via-[#DDE5B6]/50 to-white/95"></div>
 
         <section className="relative z-10 mx-auto max-w-6xl px-6 py-20 md:py-24 lg:py-28">
           <div className="hero-layout grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-center xl:gap-12">
             <div className="hero-copy space-y-5 lg:pr-4">
               <h1 className="landing-reveal-up text-5xl font-extrabold leading-[1.02] tracking-[-0.03em] text-[#2D3B1E] lg:text-6xl drop-shadow-sm" style={{ animationDelay: "170ms" }}>
-                Modernizing TB-DOTS<br/>
-                <span className="text-[#606C38]">Management.</span>
+                Carmona TB-DOTS<br/>
+                <span className="text-[#606C38]">Management</span>
               </h1>
               <p className="landing-text-fade max-w-xl text-base font-medium leading-relaxed tracking-[0.01em] text-[#2D3B1E]/80 md:text-lg" style={{ animationDelay: "260ms" }}>
                 TEREA empowers healthcare providers in Carmona with an AI-driven dashboard to monitor patient compliance, triage risks, and streamline clinical workflows in real-time.
               </p>
               <div className="landing-reveal-up flex flex-wrap items-center gap-5 text-sm font-semibold text-[#2D3B1E]/90" style={{ animationDelay: "320ms" }}>
-                <span className="flex items-center gap-1.5"><Users className="h-4 w-4 text-[#606C38]" /> Population Tracking</span>
+                <span className="flex items-center gap-1.5"><Users className="h-4 w-4 text-[#606C38]" /> Patient Tracking</span>
                 <span className="h-1 w-1 rounded-full bg-[#606C38]/60" />
                 <span className="flex items-center gap-1.5"><Activity className="h-4 w-4 text-[#606C38]" /> Automated Triage</span>
               </div>
-              <div className="landing-reveal-up flex flex-wrap gap-3 pt-4" style={{ animationDelay: "340ms" }}>
-                <Button 
-                  onClick={() => navigate("/login")}
-                  className="btn-premium group h-12 gap-2 rounded-xl border-0 bg-[#606C38] px-8 font-bold text-white hover:bg-[#2D3B1E] sm:min-w-[215px]"
-                >
-                  Access Dashboard <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
-                </Button>
-              </div>
-              
               <div className="landing-reveal-up flex items-center gap-2 pt-4 text-xs font-semibold text-[#2D3B1E]/60" style={{ animationDelay: "380ms" }}>
                 <ShieldCheck className="h-4 w-4 text-green-600" />
                 <span>Compliant with the PH Data Privacy Act of 2012</span>
               </div>
             </div>
 
-            {/* Admin Dashboard Mockup with 3D Isometric Polish */}
             <div className="hero-device-wrap landing-reveal-up flex justify-center lg:justify-end lg:pl-4" style={{ animationDelay: "220ms" }}>
               <div className="transition-transform duration-500 ease-in-out w-full max-w-md" style={{ transform: `translateY(${parallaxY}px)` }}>
                 <div className="relative" style={{ perspective: "2000px" }}>
                   <div className="absolute -inset-7 -z-10 rounded-[2rem] bg-gradient-to-br from-[#DDE5B6]/50 via-white/60 to-[#606C38]/25 blur-2xl" />
                   
-                  {/* Web Dashboard Window Mockup */}
                   <div 
                     className="relative flex flex-col rounded-2xl border border-slate-200/50 bg-white/95 p-4 shadow-[0_28px_60px_rgba(45,59,30,0.12)] backdrop-blur-md transition-transform duration-700 hover:rotate-0 hover:scale-105"
                     style={{ transform: "rotateY(-12deg) rotateX(8deg) scale(0.95)" }}
@@ -227,7 +228,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* How it works Section - Centered Layout with Connecting Line */}
+      {/* How it works Section */}
       <section className="journey-section relative overflow-hidden py-24 md:py-28 bg-white border-t border-slate-100">
         <div className="journey-glow journey-glow-left opacity-40" aria-hidden="true" />
         <div className="journey-glow journey-glow-right opacity-40" aria-hidden="true" />
@@ -239,7 +240,6 @@ export default function LandingPage() {
           </div>
 
           <div className="relative">
-            {/* The Connecting Line */}
             <div className="absolute left-1/2 top-8 bottom-8 hidden w-px -translate-x-1/2 border-l-2 border-dashed border-[#606C38]/20 sm:block" aria-hidden="true" />
             
             <div className="grid gap-6 sm:grid-cols-2 relative z-10">
@@ -265,13 +265,10 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Footer - Alignment Polished */}
+      {/* Footer */}
       <footer className="border-t border-slate-100 bg-white py-10">
         <div className="mx-auto max-w-6xl px-6 flex flex-col items-center gap-6 sm:flex-row sm:justify-between">
-          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-3 text-center sm:text-left">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#606C38]">
-              <span className="text-xs font-bold text-white">T</span>
-            </div>
+          <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left">
             <div>
               <p className="text-sm font-semibold text-[#2D3B1E]/80">
                 © 2026 TEREA. Municipality of Carmona.
@@ -281,7 +278,7 @@ export default function LandingPage() {
               </p>
             </div>
           </div>
-          
+        
           <Button 
             className="btn-premium group h-10 rounded-xl border border-slate-200 bg-white shadow-sm px-5 font-bold text-[#2D3B1E] hover:bg-[#606C38] hover:text-white hover:border-[#606C38]"
             onClick={() => navigate("/login")}

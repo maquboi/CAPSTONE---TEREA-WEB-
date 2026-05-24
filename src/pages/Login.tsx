@@ -139,22 +139,17 @@ export default function Login() {
       <div
         className="relative hidden lg:flex lg:w-[52%] bg-cover bg-center"
         style={{
-          backgroundImage: "url('https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?q=80&w=2070&auto=format&fit=crop')",
+          backgroundImage: "url('/CarmonaHealthBarangay.jpg')",
           backgroundColor: "#DDE5B6"
         }}
       >
         <div className="absolute inset-0 bg-gradient-to-br from-[#2D3B1E]/90 via-[#2D3B1E]/74 to-[#606C38]/70" />
 
-        <div className="relative z-10 flex w-full flex-col justify-between p-12 xl:p-14">
+        <div className="relative z-10 flex w-full flex-col justify-between p-11 xl:p-14">
           <div className="space-y-8">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/35 bg-white/20 shadow-lg backdrop-blur-md">
-                <span className="text-2xl font-extrabold text-white">T</span>
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight text-white">TEREA</h1>
-                <p className="text-xs font-semibold tracking-[0.14em] text-[#DDE5B6]">TB RISK ASSESSMENT PLATFORM</p>
-              </div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-white">TEREA</h1>
+              <p className="text-xs font-semibold tracking-[0.14em] text-[#DDE5B6]">TB RISK ASSESSMENT PLATFORM</p>
             </div>
 
             <div className="space-y-4">
@@ -201,14 +196,9 @@ export default function Login() {
             </button>
           </div>
 
-          <div className="lg:hidden flex items-center justify-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#606C38] shadow-md">
-              <span className="text-xl font-bold text-white">T</span>
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-[#2D3B1E]">TEREA</h1>
-              <p className="text-xs font-semibold tracking-wider text-[#606C38]">RISK ASSESSMENT</p>
-            </div>
+          <div className="lg:hidden text-center">
+            <h1 className="text-2xl font-bold tracking-tight text-[#2D3B1E]">TEREA</h1>
+            <p className="text-xs font-semibold tracking-wider text-[#606C38]">RISK ASSESSMENT</p>
           </div>
 
           <div className="space-y-2 text-center lg:text-left">
