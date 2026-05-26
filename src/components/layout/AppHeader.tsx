@@ -36,21 +36,26 @@ export function AppHeader({ userName, userRole }: AppHeaderProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // Function to pull the latest settings from LocalStorage
+  // Function to pull the latest settings from LocalStorage safely
   const getDoctorSettings = () => {
+    const defaultSettings = { patientAlerts: true, appointmentReminders: true, followUpAlerts: true };
     const saved = localStorage.getItem("doctorSystemSettings");
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) { return null; }
+      try { 
+        const parsed = JSON.parse(saved); 
+        return { ...defaultSettings, ...parsed }; 
+      } catch (e) { return defaultSettings; }
     }
-    return { patientAlerts: true, appointmentReminders: true, followUpAlerts: true };
+    return defaultSettings;
   };
 
   // Function to determine if a notification should be shown based on settings
   const shouldShowNotification = (notif: Notification, settings: any) => {
     if (!notif.type) return true; 
-    if ((notif.type === 'request' || notif.type === 'diary_update') && !settings.patientAlerts) return false;
-    if (notif.type === 'note' && !settings.followUpAlerts) return false;
-    if (notif.type === 'appointment' && !settings.appointmentReminders) return false;
+    
+    if ((notif.type === 'request' || notif.type === 'diary_update') && settings.patientAlerts === false) return false;
+    if (notif.type === 'note' && settings.followUpAlerts === false) return false;
+    if (notif.type === 'appointment' && settings.appointmentReminders === false) return false;
     
     return true;
   };
@@ -65,14 +70,18 @@ export function AppHeader({ userName, userRole }: AppHeaderProps) {
 
       const currentSettings = getDoctorSettings();
 
-      // 1. Fetch existing unread notifications
-      const { data: initialNotifs } = await supabase
+      // 1. Fetch existing unread notifications with ERROR LOGGING
+      const { data: initialNotifs, error } = await supabase
         .from('notifications')
         .select('*')
         .eq('doctor_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (initialNotifs && isMounted) {
+      if (error) {
+        console.error("🚨 NOTIFICATION FETCH ERROR:", error.message, error.details, error.hint);
+      } else if (initialNotifs && isMounted) {
+        console.log("✅ Fetched Notifications Data:", initialNotifs);
+        
         const filteredNotifs = initialNotifs
           .filter(n => shouldShowNotification(n, currentSettings))
           .slice(0, 10);
@@ -139,6 +148,7 @@ export function AppHeader({ userName, userRole }: AppHeaderProps) {
   };
 
   const formatTime = (isoString: string) => {
+    if (!isoString) return '';
     const date = new Date(isoString);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
