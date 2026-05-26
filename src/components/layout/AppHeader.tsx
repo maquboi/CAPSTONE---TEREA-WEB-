@@ -19,9 +19,10 @@ interface Notification {
   id: string;
   title: string;
   message: string;
-  type: string; // Added type to filter based on settings
+  type: string; 
   is_read: boolean;
   created_at: string;
+  doctor_id?: string; 
 }
 
 export function AppHeader({ userName, userRole }: AppHeaderProps) {
@@ -34,7 +35,6 @@ export function AppHeader({ userName, userRole }: AppHeaderProps) {
   // Real-time states
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // Function to pull the latest settings from LocalStorage
   const getDoctorSettings = () => {
@@ -42,14 +42,12 @@ export function AppHeader({ userName, userRole }: AppHeaderProps) {
     if (saved) {
       try { return JSON.parse(saved); } catch (e) { return null; }
     }
-    // Default fallback
     return { patientAlerts: true, appointmentReminders: true, followUpAlerts: true };
   };
 
   // Function to determine if a notification should be shown based on settings
   const shouldShowNotification = (notif: Notification, settings: any) => {
     if (!notif.type) return true; 
-    // Map database notification types to the Settings toggles
     if ((notif.type === 'request' || notif.type === 'diary_update') && !settings.patientAlerts) return false;
     if (notif.type === 'note' && !settings.followUpAlerts) return false;
     if (notif.type === 'appointment' && !settings.appointmentReminders) return false;
@@ -58,22 +56,23 @@ export function AppHeader({ userName, userRole }: AppHeaderProps) {
   };
 
   useEffect(() => {
+    let channel: any = null;
+    let isMounted = true;
+
     const setupNotifications = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      setCurrentUserId(user.id);
+      if (!user || !isMounted) return;
 
       const currentSettings = getDoctorSettings();
 
-      // 1. Fetch existing unread notifications & FILTER based on settings
+      // 1. Fetch existing unread notifications
       const { data: initialNotifs } = await supabase
         .from('notifications')
         .select('*')
         .eq('doctor_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (initialNotifs) {
-        // Filter out notifications the doctor opted out of, then grab the latest 10
+      if (initialNotifs && isMounted) {
         const filteredNotifs = initialNotifs
           .filter(n => shouldShowNotification(n, currentSettings))
           .slice(0, 10);
@@ -82,21 +81,22 @@ export function AppHeader({ userName, userRole }: AppHeaderProps) {
         setUnreadCount(filteredNotifs.filter(n => !n.is_read).length);
       }
 
-      // 2. Subscribe to Real-time inserts
-      const channel = supabase
-        .channel('realtime_notifications')
+      // 2. Subscribe to Real-time inserts with a UNIQUE channel name
+      channel = supabase
+        .channel(`doctor-notifs-${user.id}`)
         .on(
           'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'notifications', filter: `doctor_id=eq.${user.id}` },
+          { event: 'INSERT', schema: 'public', table: 'notifications' },
           (payload) => {
             const newNotif = payload.new as Notification;
             
-            // Re-fetch settings just in case they changed it recently
+            // SECURITY: Client-side filter to ensure this doctor only sees their own alerts
+            if (newNotif.doctor_id !== user.id) return;
+            
             const activeSettings = getDoctorSettings();
             
-            // ONLY process and toast if the setting allows it
             if (shouldShowNotification(newNotif, activeSettings)) {
-              setNotifications((prev) => [newNotif, ...prev].slice(0, 10)); // Keep max 10 in UI
+              setNotifications((prev) => [newNotif, ...prev].slice(0, 10)); 
               setUnreadCount((prev) => prev + 1);
               
               toast({ 
@@ -106,23 +106,28 @@ export function AppHeader({ userName, userRole }: AppHeaderProps) {
             }
           }
         )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Realtime notifications actively listening!');
+          }
+        });
     };
 
     setupNotifications();
 
-    // Listen for setting changes made in Settings.tsx to immediately re-filter if needed
     const handleSettingsChange = () => setupNotifications();
     window.addEventListener('settingsUpdated', handleSettingsChange);
-    return () => window.removeEventListener('settingsUpdated', handleSettingsChange);
+    
+    return () => {
+      isMounted = false;
+      window.removeEventListener('settingsUpdated', handleSettingsChange);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
 
   }, [toast]);
 
-  // Mark notification as read when clicked
   const handleNotificationClick = async (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
     setUnreadCount(prev => Math.max(0, prev - 1));

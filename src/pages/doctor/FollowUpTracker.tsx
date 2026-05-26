@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -78,6 +79,7 @@ const translations: Record<string, Record<string, string>> = {
 
 interface Appointment {
   id: string | number;
+  patient_id: string;
   appointment_date: string; 
   appointment_time: string; 
   location: string | null;
@@ -116,6 +118,7 @@ const getDueBadge = (dateStr: string, status: string, t: (k: string) => string) 
 };
 
 export default function FollowUpTracker() {
+  const navigate = useNavigate();
   const { language } = useLanguage();
   const t = (key: string) => translations[language]?.[key] || translations.en[key] || key;
 
@@ -315,7 +318,16 @@ export default function FollowUpTracker() {
                         <Clock className="w-3.5 h-3.5"/> {formatTime(followUp.appointment_time)}
                       </TableCell>
                       <TableCell>{getDueBadge(followUp.appointment_date, followUp.status, t)}</TableCell>
-                      <TableCell className="pr-6"><Button variant="outline" size="sm" className="border-[#DDE5B6] text-[#606C38] hover:bg-[#FEFAE0] hover:text-[#2D3B1E]">{t("viewBtn")}</Button></TableCell>
+                      <TableCell className="pr-6">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="border-[#DDE5B6] text-[#606C38] hover:bg-[#FEFAE0] hover:text-[#2D3B1E]"
+                          onClick={() => navigate(`/doctor/patient-details/${followUp.patient_id}`)}
+                        >
+                          {t("viewBtn")}
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

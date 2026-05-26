@@ -67,7 +67,6 @@ const doctorNavSections: NavSection[] = [
     title: "Patients",
     items: [
       { title: "Patients", href: "/doctor/patients", icon: Users },
-      { title: "Patient Tracker", href: "/doctor/tracker", icon: Users },
       { title: "Follow-up Tracker", href: "/doctor/follow-ups", icon: Activity },
     ],
   },

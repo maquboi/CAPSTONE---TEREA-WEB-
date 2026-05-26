@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -34,9 +34,10 @@ import {
   Trash2,
   SendHorizontal,
   Stethoscope,
-  CheckCircle,
   User,
-  FileCheck2
+  FileCheck2,
+  Scale,
+  Info
 } from "lucide-react";
 import { useLanguage } from "../admin/LanguageContext";
 
@@ -49,7 +50,8 @@ const translations: Record<string, Record<string, string>> = {
     accountStatus: "Account Status",
     verifiedPatient: "Verified Patient",
     pendingVerification: "Pending Verification",
-    curedPatient: "Treatment Completed / Cured",
+    curedPatient: "Cured",
+    treatmentCompletedPatient: "Treatment Completed",
     symptomatic: "Symptomatic",
     closeContact: "Close Contact",
     protocolMemo: "Daily Protocol Memo",
@@ -61,8 +63,11 @@ const translations: Record<string, Record<string, string>> = {
     patientReports: "Patient Reports",
     noConcerns: "No reported concerns.",
     roadmapConfig: "Roadmap Configuration",
+    selectRegimen: "TB Treatment Protocol",
+    sixMonthDots: "6-Month DOTS",
+    fourMonthRegimen: "Shortened 4-Month Regimen (BPaL/BPaLM)",
     startDate: "Treatment Start Date",
-    endDate: "Treatment End Date",
+    endDate: "Treatment End Date (Auto-Calculated)",
     saveSync: "Save & Sync Dates",
     autoGen: "Auto-Generate TB Protocol",
     milestoneProgress: "Real-time Roadmap Progress",
@@ -80,7 +85,7 @@ const translations: Record<string, Record<string, string>> = {
     noPrescriptions: "No active prescriptions.",
     missingFields: "Missing Fields",
     missingDates: "Missing Dates",
-    missingDatesDesc: "Please select both a Start Date and an End Date.",
+    missingDatesDesc: "Please select both a Start Date and a Treatment Protocol.",
     success: "Success",
     treatmentActive: "Treatment activated. Roadmap is now synced.",
     protocolGenerated: "Protocol Generated",
@@ -92,9 +97,13 @@ const translations: Record<string, Record<string, string>> = {
     continuationPhase: "Continuation Phase",
     postCarePhase: "Post-Care Archival",
     dischargeBtn: "Discharge & Generate E-Certificate",
-    dischargeSuccess: "Patient marked as cured. E-Certificate generated and follow-ups scheduled.",
+    dischargeSuccess: "Patient discharged. E-Certificate generated and follow-ups scheduled.",
     error: "Error",
-    syncFailed: "Sync Failed"
+    syncFailed: "Sync Failed",
+    patientVitals: "Patient Vitals",
+    weight: "Current Weight (kg)",
+    updateWeight: "Update Weight",
+    weightSaved: "Weight Updated",
   },
   fil: {
     backBtn: "Bumalik sa Listahan ng Pasyente",
@@ -104,7 +113,8 @@ const translations: Record<string, Record<string, string>> = {
     accountStatus: "Katayuan ng Account",
     verifiedPatient: "Na-verify na Pasyente",
     pendingVerification: "Nakabinbing Pag-verify",
-    curedPatient: "Tapos na ang Gamutan / Magaling na",
+    curedPatient: "Magaling na (Cured)",
+    treatmentCompletedPatient: "Tapos na ang Gamutan",
     symptomatic: "Symptomatic",
     closeContact: "Close Contact",
     protocolMemo: "Daily Protocol Memo",
@@ -116,8 +126,11 @@ const translations: Record<string, Record<string, string>> = {
     patientReports: "Mga Ulat ng Pasyente",
     noConcerns: "Walang mga iniulat na alalahanin.",
     roadmapConfig: "Konpigurasyon ng Roadmap",
+    selectRegimen: "TB Treatment Protocol",
+    sixMonthDots: "6-Month DOTS",
+    fourMonthRegimen: "Shortened 4-Month Regimen (BPaL/BPaLM)",
     startDate: "Petsa ng Pagsisimula ng Gamutan",
-    endDate: "Petsa ng Pagtatapos ng Gamutan",
+    endDate: "Petsa ng Pagtatapos ng Gamutan (Auto)",
     saveSync: "I-save at I-sync ang mga Petsa",
     autoGen: "Auto-Generate TB Protocol",
     milestoneProgress: "Progress ng Roadmap",
@@ -135,7 +148,7 @@ const translations: Record<string, Record<string, string>> = {
     noPrescriptions: "Walang aktibong reseta.",
     missingFields: "May kulang na impormasyon",
     missingDates: "Kulang ang Petsa",
-    missingDatesDesc: "Pakipili ang parehong petsa ng pagsisimula at pagtatapos.",
+    missingDatesDesc: "Pakipili ang petsa ng pagsisimula at ang TB Protocol.",
     success: "Tagumpay",
     treatmentActive: "Aktibo na ang gamutan. Naka-sync na ang roadmap.",
     protocolGenerated: "Nabuo na ang Protocol",
@@ -147,9 +160,13 @@ const translations: Record<string, Record<string, string>> = {
     continuationPhase: "Continuation Phase",
     postCarePhase: "Post-Care Archival",
     dischargeBtn: "I-discharge at Gumawa ng E-Certificate",
-    dischargeSuccess: "Minarkahang magaling na ang pasyente. Nakaiskedyul na ang follow-ups.",
+    dischargeSuccess: "Na-discharge ang pasyente. Nakaiskedyul na ang follow-ups.",
     error: "Error",
-    syncFailed: "Error sa Pag-sync"
+    syncFailed: "Error sa Pag-sync",
+    patientVitals: "Vitals ng Pasyente",
+    weight: "Kasalukuyang Timbang (kg)",
+    updateWeight: "I-update ang Timbang",
+    weightSaved: "Na-update ang Timbang",
   }
 };
 
@@ -167,21 +184,37 @@ export default function PatientDetail() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingWeight, setSavingWeight] = useState(false);
   const [prescribing, setPrescribing] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [postingMemo, setPostingMemo] = useState(false);
-  const [discharging, setDischarging] = useState(false);
-  const [patient, setPatient] = useState<any>(null);
   
+  // Discharge States
+  const [dischargeModalOpen, setDischargeModalOpen] = useState(false);
+  const [discharging, setDischarging] = useState(false);
+
+  const [patient, setPatient] = useState<any>(null);
   const [meds, setMeds] = useState<any[]>([]);
   const [appointments, setAppointments] = useState<any[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
-
+  
+  const [tbRegimen, setTbRegimen] = useState("6-Month DOTS");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [memoText, setMemoText] = useState("");
+  const [currentWeight, setCurrentWeight] = useState("");
 
   const [newMed, setNewMed] = useState({ name: "", dosage: "", time: "08:00", start: "", end: "" });
+
+  // Auto-calculate End Date based on Regimen and Start Date
+  useEffect(() => {
+    if (startDate && tbRegimen) {
+      const start = new Date(startDate);
+      const durationDays = tbRegimen.includes("4-Month") ? 120 : 180;
+      start.setDate(start.getDate() + durationDays);
+      setEndDate(start.toISOString().split('T')[0]);
+    }
+  }, [startDate, tbRegimen]);
 
   const createAuditLog = async (action: string, category: string, target: string, metadata: any = {}, severity: string = 'info') => {
     try {
@@ -220,6 +253,7 @@ export default function PatientDetail() {
 
       if (profile?.treatment_start_date) setStartDate(profile.treatment_start_date);
       if (profile?.treatment_end_date) setEndDate(profile.treatment_end_date);
+      if (profile?.tb_regimen) setTbRegimen(profile.tb_regimen);
 
       const { data: medications } = await supabase.from('medications').select('*').eq('user_id', id);
       setMeds(medications || []);
@@ -237,6 +271,18 @@ export default function PatientDetail() {
         .eq('user_id', id)
         .order('created_at', { ascending: false });
       setNotes(patientNotes || []);
+
+      // Fetch Latest Weight
+      const { data: vitals } = await supabase
+        .from('patient_vitals')
+        .select('weight_kg')
+        .eq('patient_id', id)
+        .order('recorded_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (vitals?.weight_kg) setCurrentWeight(vitals.weight_kg.toString());
+
     } catch (err: any) {
       triggerAlert(t("error"), err.message, "error");
     } finally {
@@ -253,7 +299,11 @@ export default function PatientDetail() {
     try {
       const { error: profileError } = await supabase
         .from('profiles')
-        .update({ treatment_start_date: startDate, treatment_end_date: endDate })
+        .update({ 
+          treatment_start_date: startDate, 
+          treatment_end_date: endDate,
+          tb_regimen: tbRegimen 
+        })
         .eq('id', id);
       if (profileError) throw profileError;
 
@@ -266,6 +316,23 @@ export default function PatientDetail() {
       triggerAlert(t("syncFailed"), err.message, "error");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveWeight = async () => {
+    if (!currentWeight) return;
+    setSavingWeight(true);
+    try {
+      const { error } = await supabase.from('patient_vitals').insert({
+        patient_id: id,
+        weight_kg: parseFloat(currentWeight)
+      });
+      if (error) throw error;
+      triggerAlert(t("success"), t("weightSaved"), "success");
+    } catch (err: any) {
+      triggerAlert(t("error"), err.message, "error");
+    } finally {
+      setSavingWeight(false);
     }
   };
 
@@ -302,11 +369,22 @@ export default function PatientDetail() {
         return result.toISOString().split('T')[0];
       };
 
-      const protocolMilestones = [
-        { patient_id: id, doctor_id: user?.id, title: "End of Intensive Phase Sputum Test", location: "TB DOTS Clinic", appointment_date: addDays(start, 60), status: "pending", type: "protocol" },
-        { patient_id: id, doctor_id: user?.id, title: "Month 5 Sputum Follow-up", location: "TB DOTS Clinic", appointment_date: addDays(start, 150), status: "pending", type: "protocol" },
-        { patient_id: id, doctor_id: user?.id, title: "Final Sputum & Cure Assessment", location: "TB DOTS Clinic", appointment_date: addDays(start, 180), status: "pending", type: "protocol" }
-      ];
+      let protocolMilestones = [];
+
+      if (tbRegimen.includes("4-Month")) {
+        // Shortened 4-Month Regimen Milestones
+        protocolMilestones = [
+          { patient_id: id, doctor_id: user?.id, title: "End of Month 2 Sputum Test", location: "TB DOTS Clinic", appointment_date: addDays(start, 60), status: "pending", type: "protocol" },
+          { patient_id: id, doctor_id: user?.id, title: "Final Month 4 Cure Assessment", location: "TB DOTS Clinic", appointment_date: addDays(start, 120), status: "pending", type: "protocol" }
+        ];
+      } else {
+        // Standard 6-Month DOTS Milestones
+        protocolMilestones = [
+          { patient_id: id, doctor_id: user?.id, title: "End of Intensive Phase Sputum Test", location: "TB DOTS Clinic", appointment_date: addDays(start, 60), status: "pending", type: "protocol" },
+          { patient_id: id, doctor_id: user?.id, title: "Month 5 Sputum Follow-up", location: "TB DOTS Clinic", appointment_date: addDays(start, 150), status: "pending", type: "protocol" },
+          { patient_id: id, doctor_id: user?.id, title: "Final Sputum & Cure Assessment", location: "TB DOTS Clinic", appointment_date: addDays(start, 180), status: "pending", type: "protocol" }
+        ];
+      }
 
       await supabase.from('roadmap').insert(protocolMilestones);
       triggerAlert(t("success"), t("protocolGenerated"), "success");
@@ -378,13 +456,11 @@ export default function PatientDetail() {
     } catch (err: any) { console.error(err); }
   };
 
-  const handleDischargePatient = async () => {
+  const confirmDischarge = async (dischargeType: 'cured' | 'treatment_completed') => {
     setDischarging(true);
     try {
-      // 1. Mark patient as cured
-      await supabase.from('profiles').update({ status: 'cured' }).eq('id', id);
+      await supabase.from('profiles').update({ status: dischargeType }).eq('id', id);
 
-      // 2. Schedule 6-mo and 1-yr Post-Treatment X-Ray Checkups
       const cureDate = new Date();
       const in6Months = new Date(cureDate.setMonth(cureDate.getMonth() + 6)).toISOString().split('T')[0];
       const in1Year = new Date(cureDate.setFullYear(cureDate.getFullYear() + 1)).toISOString().split('T')[0];
@@ -396,12 +472,11 @@ export default function PatientDetail() {
         { patient_id: id, doctor_id: user?.id, title: "1-Year Post-Treatment Medical Clearance", location: "Carmona Health Center", appointment_date: in1Year, status: "scheduled", type: "post-treatment" }
       ]);
 
-      // 3. Log the Admin Archiving Action
-      createAuditLog("Patient Discharged", "Treatment Lifecycle", patient.full_name, { action: "Marked Cured & Scheduled Follow-ups" });
+      createAuditLog("Patient Discharged", "Treatment Lifecycle", patient.full_name, { action: `Marked ${dischargeType} & Scheduled Follow-ups` });
 
+      setDischargeModalOpen(false);
       triggerAlert(t("success"), t("dischargeSuccess"), "success");
       
-      // 4. Trigger E-Certificate Print Mode natively
       setTimeout(() => {
         window.print();
         fetchData();
@@ -423,10 +498,16 @@ export default function PatientDetail() {
   let timeProgress = 0;
   let daysLeft = 0;
   let phase = t("notStarted");
+  let phaseColor = "bg-slate-100 text-slate-800 border-slate-300";
+  let phaseDesc = "";
   
-  if (patient?.status === 'cured') {
+  const isCured = patient?.status === 'cured' || patient?.status === 'treatment_completed';
+  const isVerified = patient?.status === 'active' || isCured;
+
+  if (isCured) {
     phase = t("postCarePhase");
     timeProgress = 100;
+    phaseColor = "bg-emerald-100 text-emerald-800 border-emerald-300";
   } else if (startDate && endDate) {
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -435,11 +516,17 @@ export default function PatientDetail() {
     const elapsed = Math.ceil((today.getTime() - start.getTime()) / (1000 * 3600 * 24));
     timeProgress = Math.min(Math.max((elapsed / totalDuration) * 100, 0), 100);
     daysLeft = Math.max(totalDuration - elapsed, 0);
-    phase = elapsed <= 60 ? t("intensivePhase") : t("continuationPhase");
+    
+    if (elapsed <= 60) {
+      phase = t("intensivePhase");
+      phaseColor = "bg-amber-100 text-amber-900 border-amber-300";
+      phaseDesc = "Patient is in the first 2 months (Intensive Phase). Standard protocol requires 4 drugs.";
+    } else {
+      phase = t("continuationPhase");
+      phaseColor = "bg-blue-100 text-blue-900 border-blue-300";
+      phaseDesc = `Patient is in the Continuation Phase for the ${tbRegimen}.`;
+    }
   }
-
-  const isVerified = patient?.status === 'active' || patient?.status === 'cured';
-  const isCured = patient?.status === 'cured';
 
   return (
     <DashboardLayout role="doctor" userName="Doctor">
@@ -448,11 +535,50 @@ export default function PatientDetail() {
       <Dialog open={alert.open} onOpenChange={(open) => setAlert({...alert, open})}>
         <DialogContent className="sm:max-w-[400px] rounded-2xl p-6 text-center animate-in fade-in zoom-in-95 duration-200 bg-white border-slate-200 shadow-xl font-sans print:hidden">
           <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${alert.type === 'success' ? 'bg-[#DDE5B6]' : 'bg-slate-200'}`}>
-            {alert.type === 'success' ? <CheckCircle className="h-6 w-6 text-[#606C38]" /> : <AlertCircle className="h-6 w-6 text-slate-700" />}
+            {alert.type === 'success' ? <CheckCircle2 className="h-6 w-6 text-[#606C38]" /> : <AlertCircle className="h-6 w-6 text-slate-700" />}
           </div>
           <h2 className="text-lg font-bold text-black">{alert.title}</h2>
           <p className="text-slate-600 mt-2 text-sm">{alert.message}</p>
           <Button className="mt-6 w-full rounded-xl bg-[#606C38] hover:bg-[#283618] text-white" onClick={() => setAlert({...alert, open: false})}>Okay</Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Discharge Classification Modal */}
+      <Dialog open={dischargeModalOpen} onOpenChange={setDischargeModalOpen}>
+        <DialogContent className="sm:max-w-[500px] rounded-2xl p-6 bg-white font-sans">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-slate-900">Patient Discharge Classification</DialogTitle>
+            <DialogDescription className="text-slate-500 pt-2">
+              Select the final DOH classification for this patient. This will permanently lock their treatment roadmap and generate their E-Certificate.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <Button 
+              variant="outline" 
+              className="h-auto flex flex-col items-start p-4 border-emerald-200 hover:bg-emerald-50 hover:border-emerald-500 transition-all text-left"
+              onClick={() => confirmDischarge('cured')}
+              disabled={discharging}
+            >
+              <span className="font-bold text-emerald-800 text-lg">Cured</span>
+              <span className="text-slate-600 font-normal mt-1 text-sm whitespace-normal">
+                Patient has completed the 6-month treatment AND presented a negative sputum smear result at the end of treatment.
+              </span>
+            </Button>
+            <Button 
+              variant="outline" 
+              className="h-auto flex flex-col items-start p-4 border-blue-200 hover:bg-blue-50 hover:border-blue-500 transition-all text-left"
+              onClick={() => confirmDischarge('treatment_completed')}
+              disabled={discharging}
+            >
+              <span className="font-bold text-blue-800 text-lg">Treatment Completed</span>
+              <span className="text-slate-600 font-normal mt-1 text-sm whitespace-normal">
+                Patient has completed the treatment duration, but a final sputum smear test was not conducted or results are unavailable.
+              </span>
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDischargeModalOpen(false)}>Cancel</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -466,15 +592,25 @@ export default function PatientDetail() {
 
           {!isCured && (
             <Button 
-              onClick={handleDischargePatient} 
-              disabled={discharging}
+              onClick={() => setDischargeModalOpen(true)} 
               className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl gap-2 font-bold shadow-sm"
             >
-              {discharging ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCheck2 className="h-4 w-4" />}
+              <FileCheck2 className="h-4 w-4" />
               {t("dischargeBtn")}
             </Button>
           )}
         </div>
+
+        {/* Phase Alert Banner */}
+        {!isCured && startDate && endDate && (
+          <div className={`rounded-xl border p-4 flex items-start gap-4 shadow-sm ${phaseColor}`}>
+            <Info className="h-6 w-6 mt-0.5 shrink-0" />
+            <div>
+              <h3 className="font-bold text-lg">{phase} - {tbRegimen}</h3>
+              <p className="text-sm mt-1 opacity-90">{phaseDesc}</p>
+            </div>
+          </div>
+        )}
 
         {/* TOP SECTION: Unified Patient Info Header Card */}
         <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
@@ -494,7 +630,7 @@ export default function PatientDetail() {
                   <h2 className="text-3xl font-bold text-black tracking-tight">{patient?.full_name}</h2>
                   <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mt-2">
                     <Badge variant={isCured ? "default" : (isVerified ? "default" : "outline")} className={`px-3 py-1 font-semibold ${isCured ? "bg-emerald-600 hover:bg-emerald-700 text-white" : (isVerified ? "bg-[#606C38] hover:bg-[#283618] text-white border-none" : "text-slate-600 border-slate-300 bg-slate-100")}`}>
-                      {isCured ? t("curedPatient") : (isVerified ? t("verifiedPatient") : t("pendingVerification"))}
+                      {patient?.status === 'cured' ? t("curedPatient") : (patient?.status === 'treatment_completed' ? t("treatmentCompletedPatient") : (isVerified ? t("verifiedPatient") : t("pendingVerification")))}
                     </Badge>
                     <Badge variant="outline" className={`font-bold px-3 py-1 ${isCured ? "bg-slate-100 text-slate-600 border-slate-300" : "bg-[#FEFAE0] text-[#606C38] border-[#DDE5B6]"}`}>
                       {phase}
@@ -514,9 +650,38 @@ export default function PatientDetail() {
         {/* MAIN GRID LAYOUT */}
         <div className="grid gap-6 lg:grid-cols-3">
           
-          {/* LEFT COLUMN: Reports & Memos */}
+          {/* LEFT COLUMN: Vitals, Reports & Memos */}
           <div className="space-y-6 lg:col-span-1">
             
+            {/* Vitals Card */}
+            <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
+              <CardHeader className="pb-3 border-b border-slate-100">
+                <CardTitle className="flex items-center gap-2 text-md text-[#283618] font-bold">
+                  <Scale className="h-5 w-5 text-[#606C38]" /> {t("patientVitals")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4 space-y-4">
+                <div>
+                  <Label className="text-slate-700 font-semibold text-xs uppercase tracking-wider mb-2 block">{t("weight")}</Label>
+                  <div className="flex gap-2">
+                    <Input 
+                      type="number" 
+                      placeholder="e.g. 65" 
+                      className="bg-slate-50 border-slate-200 rounded-xl focus-visible:ring-[#606C38]" 
+                      value={currentWeight} 
+                      onChange={(e) => setCurrentWeight(e.target.value)} 
+                      disabled={isCured}
+                    />
+                    {!isCured && (
+                      <Button onClick={handleSaveWeight} disabled={savingWeight || !currentWeight} className="bg-[#606C38] hover:bg-[#283618] text-white rounded-xl">
+                        {savingWeight ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
               <CardHeader className="pb-3 border-b border-slate-100">
                 <CardTitle className="flex items-center gap-2 text-md text-[#283618] font-bold">
@@ -589,14 +754,26 @@ export default function PatientDetail() {
                 
                 {!isCured && (
                   <>
-                    <div className="grid gap-5 sm:grid-cols-2">
-                      <div className="space-y-2">
+                    <div className="grid gap-5 sm:grid-cols-3">
+                      <div className="space-y-2 sm:col-span-3">
+                        <Label className="text-black font-bold">{t("selectRegimen")}</Label>
+                        <select 
+                          className="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl h-11 px-3 focus:outline-none focus:ring-2 focus:ring-[#606C38] focus:border-transparent transition-all"
+                          value={tbRegimen}
+                          onChange={(e) => setTbRegimen(e.target.value)}
+                        >
+                          <option value="6-Month DOTS">{t("sixMonthDots")}</option>
+                          <option value="Shortened 4-Month Regimen (BPaL/BPaLM)">{t("fourMonthRegimen")}</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-2 sm:col-span-1">
                         <Label className="text-black font-bold">{t("startDate")}</Label>
                         <Input type="date" className="bg-slate-50 border-slate-200 rounded-xl h-11 focus-visible:ring-[#606C38]" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                       </div>
-                      <div className="space-y-2">
-                        <Label className="text-black font-bold">{t("endDate")}</Label>
-                        <Input type="date" className="bg-slate-50 border-slate-200 rounded-xl h-11 focus-visible:ring-[#606C38]" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label className="text-slate-500 font-bold">{t("endDate")}</Label>
+                        <Input type="date" className="bg-slate-100 text-slate-500 font-semibold border-slate-200 rounded-xl h-11" value={endDate} readOnly disabled />
                       </div>
                     </div>
                     
@@ -765,7 +942,7 @@ export default function PatientDetail() {
 
         <div className="space-y-8">
           <p className="text-lg leading-relaxed text-justify">
-            This is to certify that <strong>{patient?.full_name?.toUpperCase()}</strong>, a resident of Barangay {patient?.barangay || "Carmona"}, has successfully completed the required 6-month Directly Observed Treatment, Short-course (DOTS) regimen under the supervision of the Carmona Health Center.
+            This is to certify that <strong>{patient?.full_name?.toUpperCase()}</strong>, a resident of Barangay {patient?.barangay || "Carmona"}, has successfully completed the required Directly Observed Treatment, Short-course (DOTS) regimen under the supervision of the Carmona Health Center.
           </p>
 
           <div className="grid grid-cols-2 gap-y-6 text-md bg-slate-50 p-6 rounded-lg border border-slate-200">
@@ -774,8 +951,8 @@ export default function PatientDetail() {
               <span className="font-semibold">{patient?.id?.substring(0, 8).toUpperCase()}</span>
             </div>
             <div>
-              <span className="font-bold text-slate-500 block text-xs">CLINIC CODE</span>
-              <span className="font-semibold">{patient?.clinic_code || "N/A"}</span>
+              <span className="font-bold text-slate-500 block text-xs">TREATMENT PROTOCOL</span>
+              <span className="font-semibold">{tbRegimen}</span>
             </div>
             <div>
               <span className="font-bold text-slate-500 block text-xs">TREATMENT START</span>
@@ -787,7 +964,9 @@ export default function PatientDetail() {
             </div>
             <div>
               <span className="font-bold text-slate-500 block text-xs">FINAL STATUS</span>
-              <span className="font-extrabold text-emerald-700 uppercase">Cured / Completed</span>
+              <span className="font-extrabold text-emerald-700 uppercase">
+                {patient?.status === 'cured' ? 'Cured' : (patient?.status === 'treatment_completed' ? 'Treatment Completed' : 'Pending')}
+              </span>
             </div>
             <div>
               <span className="font-bold text-slate-500 block text-xs">ADHERENCE RATE</span>
