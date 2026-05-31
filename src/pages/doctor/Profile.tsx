@@ -22,15 +22,15 @@ const translations: Record<string, Record<string, string>> = {
     uploadDesc: "Photo upload requires cloud storage.",
     personalInfoTitle: "Personal Information",
     personalInfoDesc: "Update your personal details",
-    firstName: "First Name",
-    lastName: "Last Name",
-    email: "Email",
+    fullName: "Full Name",
+    email: "Email Address",
     phone: "Phone Number",
-    address: "Address",
-    addressPlaceholder: "Enter clinic or home address",
-    specialty: "Specialty",
+    clinicName: "Clinic / Workplace Name",
     license: "License Number",
     saveChanges: "Save Changes",
+    saving: "Saving...",
+    errorTitle: "Error",
+    errorDesc: "Failed to update profile. Please try again.",
     okBtn: "Okay"
   },
   fil: {
@@ -44,15 +44,15 @@ const translations: Record<string, Record<string, string>> = {
     uploadDesc: "Kinakailangan ang cloud storage para sa pag-upload ng larawan.",
     personalInfoTitle: "Personal na Impormasyon",
     personalInfoDesc: "I-update ang iyong mga personal na detalye",
-    firstName: "Pangalan",
-    lastName: "Apelyido",
-    email: "Email",
+    fullName: "Buong Pangalan",
+    email: "Email Address",
     phone: "Numero ng Telepono",
-    address: "Address",
-    addressPlaceholder: "Ipasok ang address ng klinika o bahay",
-    specialty: "Espesyalisasyon",
+    clinicName: "Pangalan ng Klinika / Pinagtatrabahuan",
     license: "Numero ng Lisensya",
     saveChanges: "I-save ang mga Pagbabago",
+    saving: "Nagse-save...",
+    errorTitle: "Error",
+    errorDesc: "Nabigo ang pag-update. Subukan muli.",
     okBtn: "Okay"
   }
 };
@@ -67,15 +67,14 @@ export default function DoctorProfile() {
     setAlert({ open: true, title, message, type });
   };
 
-  const [doctorName, setDoctorName] = useState("Doctor");
+  const [doctorName, setDoctorName] = useState("Maq Salazar");
+  const [isSaving, setIsSaving] = useState(false);
   const [profile, setProfile] = useState({
-    firstName: "Maria",
-    lastName: "Santos",
-    email: "maria.santos@terea.ph",
-    phone: "+63 917 123 4567",
-    address: "", 
-    specialty: "Pulmonology",
-    license: "PRC-0123456",
+    fullName: "Maq Salazar",
+    email: "",
+    phone: "",
+    clinicName: "", 
+    license: "",
   });
 
   useEffect(() => {
@@ -84,17 +83,70 @@ export default function DoctorProfile() {
       if (user) {
         const { data: profileData } = await supabase
           .from('profiles')
-          .select('full_name')
+          .select('full_name, email, contact_number, license_number, clinic_name')
           .eq('id', user.id)
           .single();
-        if (profileData) setDoctorName(profileData.full_name);
+          
+        if (profileData) {
+          setProfile({
+            fullName: profileData.full_name || "Maq Salazar",
+            email: profileData.email || "",
+            phone: profileData.contact_number || "",
+            clinicName: profileData.clinic_name || "",
+            license: profileData.license_number || "",
+          });
+          setDoctorName(profileData.full_name || "Maq Salazar");
+        }
       }
     };
     fetchUserData();
   }, []);
 
-  const handleSave = () => {
-    triggerAlert(t("profileUpdated"), t("profileSaved"), "success");
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        // 1. Update Profile Information in Supabase
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            full_name: profile.fullName,
+            email: profile.email, 
+            contact_number: profile.phone,
+            license_number: profile.license,
+            clinic_name: profile.clinicName
+          })
+          .eq('id', user.id);
+
+        if (profileError) throw profileError;
+
+        // 2. Log Activity to Supabase
+        await supabase.from('activity_logs').insert([{
+          doctor_id: user.id,
+          action: 'Profile Update',
+          patient: 'N/A',
+          details: 'Updated personal profile information and credentials.'
+        }]);
+      }
+
+      // 3. Update UI State
+      setDoctorName(profile.fullName || "Maq Salazar");
+      
+      triggerAlert(t("profileUpdated"), t("profileSaved"), "success");
+    } catch (error) {
+      console.error("Error saving profile:", error);
+      triggerAlert(t("errorTitle"), t("errorDesc"), "error");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Helper to get initials for the avatar fallback
+  const getInitials = (name: string) => {
+    if (!name) return "MS";
+    return name.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase();
   };
 
   return (
@@ -103,8 +155,8 @@ export default function DoctorProfile() {
         <DialogPortal>
           <DialogOverlay className="bg-black/40 backdrop-blur-sm" />
           <DialogContent className="sm:max-w-[400px] rounded-2xl p-6 text-center animate-in fade-in zoom-in-95 duration-200 bg-white border-slate-200 shadow-xl font-sans">
-            <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${alert.type === 'success' ? 'bg-green-100' : 'bg-red-100'}`}>
-              {alert.type === 'success' ? <CheckCircle className="h-6 w-6 text-green-600" /> : <AlertCircle className="h-6 w-6 text-red-600" />}
+            <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${alert.type === 'success' ? 'bg-[#DDE5B6]' : 'bg-red-100'}`}>
+              {alert.type === 'success' ? <CheckCircle className="h-6 w-6 text-[#606C38]" /> : <AlertCircle className="h-6 w-6 text-red-600" />}
             </div>
             <h2 className="text-lg font-bold text-slate-900">{alert.title}</h2>
             <p className="text-slate-500 mt-2 text-sm">{alert.message}</p>
@@ -130,7 +182,9 @@ export default function DoctorProfile() {
                 <div className="relative">
                   <Avatar className="h-20 w-20 ring-4 ring-[#DDE5B6]/60 ring-offset-2 ring-offset-[#F4F7F4]">
                     <AvatarImage src="" />
-                    <AvatarFallback className="bg-[#606C38] text-xl text-white">MS</AvatarFallback>
+                    <AvatarFallback className="bg-[#606C38] text-xl text-white">
+                      {getInitials(profile.fullName)}
+                    </AvatarFallback>
                   </Avatar>
                   <Button 
                     size="icon" 
@@ -142,8 +196,8 @@ export default function DoctorProfile() {
                   </Button>
                 </div>
                 <div>
-                  <p className="font-semibold text-[#2D3B1E]">{profile.firstName} {profile.lastName}</p>
-                  <p className="text-sm text-[#2D3B1E]/65">{profile.email}</p>
+                  <p className="font-semibold text-[#2D3B1E]">{profile.fullName}</p>
+                  <p className="text-sm text-[#2D3B1E]/65">{profile.email || "No email set"}</p>
                 </div>
               </div>
             </CardContent>
@@ -156,39 +210,63 @@ export default function DoctorProfile() {
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="firstName">{t("firstName")}</Label>
-                  <Input id="firstName" value={profile.firstName} onChange={(e) => setProfile({ ...profile, firstName: e.target.value })} />
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="fullName">{t("fullName")}</Label>
+                  <Input 
+                    id="fullName" 
+                    value={profile.fullName} 
+                    onChange={(e) => setProfile({ ...profile, fullName: e.target.value })} 
+                    className="rounded-xl border-slate-200 focus-visible:ring-[#606C38]" 
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="lastName">{t("lastName")}</Label>
-                  <Input id="lastName" value={profile.lastName} onChange={(e) => setProfile({ ...profile, lastName: e.target.value })} />
+                  <Label htmlFor="email">{t("email")}</Label>
+                  <Input 
+                    id="email" 
+                    type="email" 
+                    value={profile.email} 
+                    onChange={(e) => setProfile({ ...profile, email: e.target.value })} 
+                    className="rounded-xl border-slate-200 focus-visible:ring-[#606C38]" 
+                  />
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">{t("email")}</Label>
-                <Input id="email" type="email" value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">{t("phone")}</Label>
-                <Input id="phone" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="address">{t("address")}</Label>
-                <Input id="address" placeholder={t("addressPlaceholder")} value={profile.address} onChange={(e) => setProfile({ ...profile, address: e.target.value })} />
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="specialty">{t("specialty")}</Label>
-                  <Input id="specialty" value={profile.specialty} onChange={(e) => setProfile({ ...profile, specialty: e.target.value })} />
+                  <Label htmlFor="phone">{t("phone")}</Label>
+                  <Input 
+                    id="phone" 
+                    value={profile.phone} 
+                    onChange={(e) => setProfile({ ...profile, phone: e.target.value })} 
+                    className="rounded-xl border-slate-200 focus-visible:ring-[#606C38]" 
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="license">{t("license")}</Label>
-                  <Input id="license" value={profile.license} onChange={(e) => setProfile({ ...profile, license: e.target.value })} />
+                  <Input 
+                    id="license" 
+                    value={profile.license} 
+                    onChange={(e) => setProfile({ ...profile, license: e.target.value })} 
+                    className="rounded-xl border-slate-200 focus-visible:ring-[#606C38]" 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="clinicName">{t("clinicName")}</Label>
+                  <Input 
+                    id="clinicName" 
+                    value={profile.clinicName} 
+                    onChange={(e) => setProfile({ ...profile, clinicName: e.target.value })} 
+                    placeholder="e.g. Carmona Health Center"
+                    className="rounded-xl border-slate-200 focus-visible:ring-[#606C38]" 
+                  />
                 </div>
               </div>
-              <div className="pt-2">
-                <Button onClick={handleSave} className="w-full sm:w-auto">{t("saveChanges")}</Button>
+              
+              <div className="pt-4">
+                <Button 
+                  onClick={handleSave} 
+                  disabled={isSaving}
+                  className="w-full sm:w-auto bg-[#606C38] hover:bg-[#2D3B1E] text-white rounded-xl h-11 px-8 font-semibold transition-all disabled:opacity-70"
+                >
+                  {isSaving ? t("saving") : t("saveChanges")}
+                </Button>
               </div>
             </CardContent>
           </Card>

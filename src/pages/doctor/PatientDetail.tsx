@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,6 +15,8 @@ import {
   TableBody,
   TableCell,
   TableRow,
+  TableHead,
+  TableHeader,
 } from "@/components/ui/table";
 import {
   ArrowLeft,
@@ -42,7 +44,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Mail,
-  Phone
+  Phone,
+  Filter
 } from "lucide-react";
 import { useLanguage } from "../admin/LanguageContext";
 
@@ -219,7 +222,7 @@ export default function PatientDetail() {
   
   // Modal States
   const [dischargeModalOpen, setDischargeModalOpen] = useState(false);
-  const [confirmSafetyModalOpen, setConfirmSafetyModalOpen] = useState(false); // Safety Pop-up State
+  const [confirmSafetyModalOpen, setConfirmSafetyModalOpen] = useState(false); 
   const [weightModalOpen, setWeightModalOpen] = useState(false);
   const [memoModalOpen, setMemoModalOpen] = useState(false);
   const [prescriptionModalOpen, setPrescriptionModalOpen] = useState(false);
@@ -230,7 +233,6 @@ export default function PatientDetail() {
 
   const [patient, setPatient] = useState<any>(null);
   const [meds, setMeds] = useState<any[]>([]);
-  const [medLogs, setMedLogs] = useState<any[]>([]); 
   const [appointments, setAppointments] = useState<any[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
   
@@ -239,11 +241,19 @@ export default function PatientDetail() {
   const [endDate, setEndDate] = useState("");
   const [memoText, setMemoText] = useState("");
   const [currentWeight, setCurrentWeight] = useState("");
+  const [doctorName, setDoctorName] = useState("");
 
   const [newMed, setNewMed] = useState({ name: "", dosage: "", time: "08:00", start: "", end: "" });
   const [editingMedId, setEditingMedId] = useState<number | null>(null); 
   
-  // Diary Calendar States
+  // SCALABLE SERVER-SIDE HISTORICAL MEDICATION LEDGER ENGINE
+  const [historicalLogs, setHistoricalLogs] = useState<any[]>([]);
+  const [logPage, setLogPage] = useState(0);
+  const [totalLogCount, setTotalLogCount] = useState(0);
+  const [logFilter, setLogFilter] = useState<'all' | 'taken' | 'missed' | 'early' | 'on-time' | 'late'>('all');
+  const LOGS_PER_PAGE = 7;
+
+  // Diary Calendar States (Kept for calendar overview tab parity if needed)
   const [diaryDate, setDiaryDate] = useState<Date>(new Date());
   const [diaryViewType, setDiaryViewType] = useState<'Day' | 'Week' | 'Month'>('Week');
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
@@ -276,8 +286,42 @@ export default function PatientDetail() {
   };
 
   useEffect(() => {
+    const fetchDoctorProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        if (user.user_metadata?.full_name) {
+          setDoctorName(user.user_metadata.full_name);
+        } else {
+          const { data: p } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
+          if (p?.full_name) setDoctorName(p.full_name);
+        }
+      }
+    };
+    fetchDoctorProfile();
     fetchData();
   }, [id]);
+
+  useEffect(() => {
+    fetchPaginatedLogs();
+  }, [id, logPage, logFilter]);
+
+  // Real-time synchronization stream pipeline for high precision database updates
+  useEffect(() => {
+    const channel = supabase
+      .channel(`med-logs-parity-${id}`)
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'medication_logs', 
+        filter: `patient_id=eq.${id}` 
+      }, () => {
+        fetchData();
+        fetchPaginatedLogs();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [id, logPage, logFilter]);
 
   const fetchData = async () => {
     try {
@@ -299,9 +343,6 @@ export default function PatientDetail() {
 
       const { data: medications } = await supabase.from('medications').select('*').eq('user_id', id);
       setMeds(medications || []);
-
-      const { data: logs } = await supabase.from('medication_logs').select('*').eq('patient_id', id);
-      setMedLogs(logs || []);
 
       const { data: appts } = await supabase
         .from('roadmap')
@@ -331,6 +372,37 @@ export default function PatientDetail() {
       triggerAlert(t("error"), err.message, "error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // FETCH DIARY RECORDS VIA MANAGED SERVER-SIDE PAGINATION WINDOWS
+  const fetchPaginatedLogs = async () => {
+    try {
+      let query = supabase
+        .from('medication_logs')
+        .select(`
+          id, log_date, time_taken, status, timing_status, created_at,
+          medication:medications(name, dosage, time)
+        `, { count: 'exact' })
+        .eq('patient_id', id);
+
+      if (logFilter === 'taken' || logFilter === 'missed') {
+        query = query.eq('status', logFilter);
+      } else if (logFilter !== 'all') {
+        query = query.eq('timing_status', logFilter);
+      }
+
+      const startRange = logPage * LOGS_PER_PAGE;
+      const { data, count, error } = await query
+        .order('log_date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .range(startRange, startRange + LOGS_PER_PAGE - 1);
+
+      if (error) throw error;
+      setHistoricalLogs(data || []);
+      setTotalLogCount(count || 0);
+    } catch (err) {
+      console.error("Historical log execution error:", err);
     }
   };
 
@@ -374,6 +446,7 @@ export default function PatientDetail() {
       if (error) throw error;
       triggerAlert(t("success"), t("weightSaved"), "success");
       setWeightModalOpen(false);
+      fetchData();
     } catch (err: any) {
       triggerAlert(t("error"), err.message, "error");
     } finally {
@@ -545,13 +618,11 @@ export default function PatientDetail() {
     } catch (err: any) { console.error(err); }
   };
 
-  // Triggers the safety pop-up window step instead of writing instantly
   const handleInitiateDischarge = (type: 'cured' | 'treatment_completed') => {
     setSelectedDischargeType(type);
     setConfirmSafetyModalOpen(true);
   };
 
-  // Final executed DB writer command
   const confirmDischarge = async () => {
     if (!selectedDischargeType) return;
     setDischarging(true);
@@ -591,7 +662,6 @@ export default function PatientDetail() {
     }
   };
 
-  // Calendar render helper functions
   const handlePrevMonth = () => {
     setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1));
   };
@@ -602,6 +672,24 @@ export default function PatientDetail() {
 
   const formatYMD = (d: Date) => {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  const formatTimeStr = (timeStr: string) => {
+    if (!timeStr) return "--:--";
+    const parts = timeStr.split(':');
+    if (parts.length < 2) return timeStr;
+    const hrs = parseInt(parts[0]);
+    const mins = parts[1];
+    return `${hrs % 12 || 12}:${mins} ${hrs >= 12 ? 'PM' : 'AM'}`;
+  };
+
+  const getTimingBadgeColor = (status: string) => {
+    switch (status) {
+      case 'on-time': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      case 'early': return 'bg-blue-50 text-blue-700 border-blue-200';
+      case 'late': return 'bg-amber-50 text-amber-700 border-amber-200';
+      default: return 'bg-red-50 text-red-700 border-red-200';
+    }
   };
 
   const renderCalendarView = () => {
@@ -631,7 +719,9 @@ export default function PatientDetail() {
             {days.map(date => {
               const isSelected = date.getDate() === diaryDate.getDate() && date.getMonth() === diaryDate.getMonth() && date.getFullYear() === diaryDate.getFullYear();
               const dateStr = formatYMD(date);
-              const logsForDay = medLogs.filter(l => l.log_date === dateStr && l.status === 'taken');
+              
+              // Parity logic matching across cached logs
+              const logsForDay = historicalLogs.filter(l => l.log_date === dateStr && l.status === 'taken');
               const hasActivity = logsForDay.length > 0;
               
               return (
@@ -696,7 +786,6 @@ export default function PatientDetail() {
     );
   };
 
-  // Re-injected risk indicator badge mapping function
   const getRiskColor = (level: string) => {
     const normalStr = level?.toLowerCase() || "";
     if (normalStr.includes("high")) return "bg-red-100 text-red-800 border-red-200";
@@ -704,11 +793,14 @@ export default function PatientDetail() {
     return "bg-emerald-100 text-emerald-800 border-emerald-200";
   };
 
-  if (loading) return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-[#606C38]" /></div>;
+  // Safe fetch mapping for trigger cached adherence properties
+  const aggregatedAdherenceRate = patient?.adherence_rate ?? 0;
 
-  const totalMeds = meds.length;
-  const takenMeds = meds.filter(m => m.is_taken).length; 
-  const adherenceRate = totalMeds > 0 ? (takenMeds / totalMeds) * 100 : 0; 
+  // =========================================================================
+  // RESTORED UI CALCULATION VARIABLES (Progress, Phases, Account Statuses)
+  // =========================================================================
+  const isCured = patient?.status === 'cured' || patient?.status === 'treatment_completed';
+  const isVerified = patient?.status === 'active' || isCured;
 
   let timeProgress = 0;
   let daysLeft = 0;
@@ -716,22 +808,27 @@ export default function PatientDetail() {
   let phaseColor = "bg-slate-100 text-slate-800 border-slate-300";
   let phaseDesc = "";
   
-  const isCured = patient?.status === 'cured' || patient?.status === 'treatment_completed';
-  const isVerified = patient?.status === 'active' || isCured;
-
   if (isCured) {
     phase = t("postCarePhase");
     timeProgress = 100;
     phaseColor = "bg-emerald-100 text-emerald-800 border-emerald-300";
+    phaseDesc = "Patient has completed their required treatment protocol.";
   } else if (startDate && endDate) {
     const start = new Date(startDate);
     const end = new Date(endDate);
     const today = new Date();
+    
+    // Normalize to midnight for accurate day calculation
+    start.setHours(0,0,0,0);
+    end.setHours(0,0,0,0);
+    today.setHours(0,0,0,0);
+    
     const totalDuration = Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24));
     const elapsed = Math.ceil((today.getTime() - start.getTime()) / (1000 * 3600 * 24));
+    
     timeProgress = Math.min(Math.max((elapsed / totalDuration) * 100, 0), 100);
     daysLeft = Math.max(totalDuration - elapsed, 0);
-    
+
     if (elapsed <= 60) {
       phase = t("intensivePhase");
       phaseColor = "bg-amber-100 text-amber-900 border-amber-300";
@@ -742,6 +839,7 @@ export default function PatientDetail() {
       phaseDesc = `Patient is in the Continuation Phase for the ${tbRegimen}.`;
     }
   }
+  // =========================================================================
 
   const selectedDateStr = formatYMD(diaryDate);
   const diaryMeds = meds.filter((med) => {
@@ -754,7 +852,7 @@ export default function PatientDetail() {
   });
 
   return (
-    <DashboardLayout role="doctor" userName="Doctor">
+    <DashboardLayout role="doctor" userName={doctorName || "Doctor"}>
       
       {/* Centralized Notification Pop-up */}
       <Dialog open={alert.open} onOpenChange={(open) => setAlert({...alert, open})}>
@@ -1168,9 +1266,14 @@ export default function PatientDetail() {
                     <div>
                       <div className="flex justify-between text-xs mb-2 font-bold uppercase text-slate-500">
                         <span>{t("adherenceLabel")}</span>
-                        <span className={adherenceRate < 80 ? "text-slate-700" : (isCured ? "text-emerald-600" : "text-[#606C38]")}>{Math.round(adherenceRate)}%</span>
+                        <span className={aggregatedAdherenceRate < 85 ? "text-red-600 font-extrabold" : (isCured ? "text-emerald-600" : "text-[#606C38]")}>{Math.round(aggregatedAdherenceRate)}%</span>
                       </div>
-                      <Progress value={adherenceRate} className={`h-2.5 rounded-full ${adherenceRate < 80 ? "bg-slate-200 [&>div]:bg-slate-600" : `bg-slate-200 [&>div]:${isCured ? 'bg-emerald-500' : 'bg-[#606C38]'}`}`} />
+                      <Progress value={aggregatedAdherenceRate} className={`h-2.5 rounded-full ${aggregatedAdherenceRate < 85 ? "bg-slate-200 [&>div]:bg-red-500" : `bg-slate-200 [&>div]:${isCured ? 'bg-emerald-500' : 'bg-[#606C38]'}`}`} />
+                      {aggregatedAdherenceRate < 85 && (
+                        <p className="text-[11px] text-red-500 font-semibold mt-1.5 flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" /> Warning: Patient compliance has fallen below the 85% DOH target threshold.
+                        </p>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -1233,71 +1336,104 @@ export default function PatientDetail() {
               </Card>
             </div>
             
+            {/* Right Side Column: Server-Side Scalable Transaction Ledger History */}
             <div className="space-y-6 lg:col-span-2">
-              {/* Medication Diary Visualization */}
               <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
-                <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between space-y-0">
-                  <CardTitle className="flex items-center gap-2 text-md text-[#283618] font-bold">
-                    <CalendarDays className="h-5 w-5 text-[#606C38]" /> {t("medicationDiary")}
-                  </CardTitle>
-                  <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
-                    {(['Day', 'Week', 'Month'] as const).map(type => (
-                      <button
-                        key={type}
-                        onClick={() => setDiaryViewType(type)}
-                        className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${diaryViewType === type ? 'bg-white shadow-sm text-[#606C38]' : 'text-slate-500 hover:text-slate-700'}`}
-                      >
-                        {type}
-                      </button>
-                    ))}
+                <CardHeader className="pb-3 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 space-y-0">
+                  <div>
+                    <CardTitle className="text-md font-bold flex items-center gap-2 text-[#283618]">
+                      <CalendarDays className="h-5 w-5 text-[#606C38]" /> {t("medicationDiary")}
+                    </CardTitle>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Filter className="h-3.5 w-3.5 text-slate-400" />
+                    <select
+                      value={logFilter}
+                      onChange={(e) => { setLogFilter(e.target.value as any); setLogPage(0); }}
+                      className="bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-8 px-2.5 focus:outline-none focus:ring-1 focus:ring-[#606C38]"
+                    >
+                      <option value="all">All Logs Registry</option>
+                      <option value="taken">Marked Taken</option>
+                      <option value="missed">Marked Missed</option>
+                      <option value="early">Evaluated: Early</option>
+                      <option value="on-time">Evaluated: On-Time</option>
+                      <option value="late">Evaluated: Late</option>
+                    </select>
                   </div>
                 </CardHeader>
-                <CardContent className="pt-6">
-                  {renderCalendarView()}
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader className="bg-slate-50/70">
+                        <TableRow className="border-b border-slate-100 hover:bg-transparent">
+                          <TableHead className="text-xs font-bold text-slate-700 h-10 pl-5">Date</TableHead>
+                          <TableHead className="text-xs font-bold text-slate-700 h-10">Medication Details</TableHead>
+                          <TableHead className="text-xs font-bold text-slate-700 h-10">Target Schedule</TableHead>
+                          <TableHead className="text-xs font-bold text-slate-700 h-10">Intake Log</TableHead>
+                          <TableHead className="text-xs font-bold text-slate-700 h-10">Status</TableHead>
+                          <TableHead className="text-xs font-bold text-slate-700 h-10 pr-5">Accuracy Evaluation</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {historicalLogs.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center italic text-xs text-slate-400 py-10">No medication diaries match your active query framework filter.</TableCell>
+                          </TableRow>
+                        ) : historicalLogs.map((log) => (
+                          <TableRow key={log.id} className="border-b border-slate-100 hover:bg-slate-50/40 transition-colors">
+                            <TableCell className="text-xs font-bold text-slate-900 h-12 pl-5">
+                              {new Date(log.log_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </TableCell>
+                            <TableCell className="text-xs font-bold text-slate-800">
+                              {log.medication?.name || "Deleted Med"} <span className="text-slate-400 font-medium">({log.medication?.dosage || "N/A"})</span>
+                            </TableCell>
+                            <TableCell className="text-xs font-medium text-slate-500">
+                              {log.medication?.time ? log.medication.time : "--:--"}
+                            </TableCell>
+                            <TableCell className="text-xs font-medium text-slate-600">
+                              {log.time_taken ? formatTimeStr(log.time_taken) : "--:--"}
+                            </TableCell>
+                            <TableCell className="h-12">
+                              <Badge className={`text-[10px] font-bold border-none uppercase ${log.status === 'taken' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                                {log.status === 'taken' ? t("taken") : 'missed'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="pr-5 h-12">
+                              <Badge variant="outline" className={`text-[10px] font-bold px-2 py-0.5 capitalize border ${getTimingBadgeColor(log.timing_status)}`}>
+                                {log.timing_status === 'on-time' ? `🎯 ${t("onTime")}` : (log.timing_status === 'early' ? t("early") : (log.timing_status === 'late' ? t("late") : t("missed")))}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
 
-                  <div className="mt-4 p-5 rounded-xl border border-slate-100 bg-slate-50">
-                    <h4 className="text-sm font-bold text-slate-800 mb-4">{diaryDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</h4>
-                    
-                    {diaryMeds.length === 0 ? (
-                      <p className="text-sm text-slate-500 italic">No medications scheduled for this date.</p>
-                    ) : (
-                      <div className="space-y-3">
-                        {diaryMeds.map((med) => {
-                          const log = medLogs.find(l => l.medication_id === med.id && l.log_date === selectedDateStr);
-                          const isTaken = log && log.status === 'taken';
-                          const timing = log?.timing_status;
-
-                          return (
-                            <div key={med.id} className="flex items-center justify-between p-3 rounded-lg bg-white border border-slate-200 shadow-sm">
-                              <div className="flex items-center gap-3">
-                                <div className={`h-8 w-8 rounded-full flex items-center justify-center ${isTaken ? 'bg-[#606C38]' : 'bg-slate-200'}`}>
-                                  {isTaken ? <Check className="h-4 w-4 text-white" /> : <Pill className="h-4 w-4 text-slate-400" />}
-                                </div>
-                                <div>
-                                  <p className="text-sm font-bold text-slate-800">{med.name} <span className="text-xs font-normal text-slate-500">({med.dosage})</span></p>
-                                  <p className="text-[11px] font-medium text-slate-400">Scheduled: {med.time}</p>
-                                </div>
-                              </div>
-                              
-                              <div className="text-right">
-                                {isTaken ? (
-                                  <div className="flex flex-col items-end">
-                                    <Badge className="bg-emerald-100 text-emerald-800 border-none hover:bg-emerald-200">{t("taken")}</Badge>
-                                    {timing && (
-                                      <span className={`text-[10px] font-bold mt-1 uppercase ${timing === 'early' ? 'text-blue-600' : (timing === 'late' ? 'text-orange-500' : 'text-[#606C38]')}`}>
-                                        {timing === 'early' ? t("early") : (timing === 'late' ? t("late") : t("onTime"))}
-                                      </span>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <Badge variant="outline" className="bg-slate-50 text-slate-500 border-slate-200">{t("missed")}</Badge>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                  {/* Server-Side Pagination Controller Footer */}
+                  <div className="p-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/50 rounded-b-2xl">
+                    <span className="text-xs text-slate-500 font-bold">
+                      Showing {historicalLogs.length > 0 ? (logPage * LOGS_PER_PAGE) + 1 : 0} - {Math.min((logPage * LOGS_PER_PAGE) + LOGS_PER_PAGE, totalLogCount)} of {totalLogCount} records
+                    </span>
+                    <div className="flex gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 rounded-lg border-slate-200"
+                        disabled={logPage === 0}
+                        onClick={() => setLogPage(prev => Math.max(0, prev - 1))}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 rounded-lg border-slate-200"
+                        disabled={(logPage + 1) * LOGS_PER_PAGE >= totalLogCount}
+                        onClick={() => setLogPage(prev => prev + 1)}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -1461,7 +1597,7 @@ export default function PatientDetail() {
             </div>
             <div>
               <span className="font-bold text-slate-500 block text-xs">ADHERENCE RATE</span>
-              <span className="font-semibold">{Math.round(adherenceRate)}%</span>
+              <span className="font-semibold">{Math.round(aggregatedAdherenceRate)}%</span>
             </div>
           </div>
 
