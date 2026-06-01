@@ -15,7 +15,7 @@ const features = [
   {
     icon: ClipboardCheck,
     title: "Automated Risk Triage",
-    description: "AI-assisted assessments instantly categorize patients by risk level, allowing you to prioritize critical cases.",
+    description: "Risk assessments instantly categorize patients by risk level, allowing you to prioritize critical cases.",
   },
   {
     icon: LineChart,
@@ -111,11 +111,10 @@ export default function LandingPage() {
           <div className="hero-layout grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-center xl:gap-12">
             <div className="hero-copy space-y-5 lg:pr-4">
               <h1 className="landing-reveal-up text-5xl font-extrabold leading-[1.02] tracking-[-0.03em] text-[#2D3B1E] lg:text-6xl drop-shadow-sm" style={{ animationDelay: "170ms" }}>
-                Carmona TB-DOTS<br/>
-                <span className="text-[#606C38]">Management</span>
+                Risk Assessment and Healthcare Management<br/>
               </h1>
               <p className="landing-text-fade max-w-xl text-base font-medium leading-relaxed tracking-[0.01em] text-[#2D3B1E]/80 md:text-lg" style={{ animationDelay: "260ms" }}>
-                TEREA empowers healthcare providers in Carmona with an AI-driven dashboard to monitor patient compliance, triage risks, and streamline clinical workflows in real-time.
+                TEREA empowers healthcare providers in Carmona with a dashboard to monitor patient compliance, triage risks, and streamline clinical workflows in real-time.
               </p>
               <div className="landing-reveal-up flex flex-wrap items-center gap-5 text-sm font-semibold text-[#2D3B1E]/90" style={{ animationDelay: "320ms" }}>
                 <span className="flex items-center gap-1.5"><Users className="h-4 w-4 text-[#606C38]" /> Patient Tracking</span>
@@ -193,8 +192,8 @@ export default function LandingPage() {
       <div className="relative z-20 mx-auto max-w-5xl px-6 -mt-8 sm:-mt-12">
         <div className="glass-card grid grid-cols-1 divide-y divide-slate-100 rounded-2xl bg-white p-6 shadow-xl shadow-slate-200/50 sm:grid-cols-3 sm:divide-x sm:divide-y-0 border border-slate-100">
           <div className="flex flex-col items-center justify-center space-y-1 p-4 text-center">
-            <h4 className="text-3xl font-extrabold text-[#2D3B1E]">100%</h4>
-            <p className="text-xs font-bold uppercase tracking-wider text-[#606C38]">DOH Aligned</p>
+            <h4 className="text-3xl font-extrabold text-[#2D3B1E]">Barangay</h4>
+            <p className="text-xs font-bold uppercase tracking-wider text-[#606C38]">Carmona</p>
           </div>
           <div className="flex flex-col items-center justify-center space-y-1 p-4 text-center">
             <h4 className="text-3xl font-extrabold text-[#2D3B1E]">Real-Time</h4>
@@ -202,7 +201,7 @@ export default function LandingPage() {
           </div>
           <div className="flex flex-col items-center justify-center space-y-1 p-4 text-center">
             <h4 className="text-3xl font-extrabold text-[#2D3B1E]">24/7</h4>
-            <p className="text-xs font-bold uppercase tracking-wider text-[#606C38]">Compliance Sync</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-[#606C38]">Compliance</p>
           </div>
         </div>
       </div>
@@ -274,7 +273,7 @@ export default function LandingPage() {
                 © 2026 TEREA. Municipality of Carmona.
               </p>
               <p className="text-xs font-medium text-[#2D3B1E]/50 mt-1 sm:mt-0.5">
-                Powered by React, Supabase, and AI Risk Analysis.
+                Powered by React, Supabase, and AI.
               </p>
             </div>
           </div>

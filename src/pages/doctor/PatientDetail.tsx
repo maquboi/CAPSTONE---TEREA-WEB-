@@ -45,7 +45,8 @@ import {
   ChevronRight,
   Mail,
   Phone,
-  Filter
+  Filter,
+  Calendar
 } from "lucide-react";
 import { useLanguage } from "../admin/LanguageContext";
 
@@ -89,7 +90,7 @@ const translations: Record<string, Record<string, string>> = {
     newMed: "New Medication",
     medName: "Meds Name",
     dosage: "Dosage (500mg)",
-    pushToPatient: "Push to Patient",
+    pushToPatient: "Add Medication",
     noPrescriptions: "No active prescriptions.",
     missingFields: "Missing Fields",
     missingDates: "Missing Dates",
@@ -236,6 +237,9 @@ export default function PatientDetail() {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
   
+  // NEW: State to store Today's Medication Logs for the real-time overview card
+  const [todayLogs, setTodayLogs] = useState<any[]>([]);
+
   const [tbRegimen, setTbRegimen] = useState("6-Month DOTS");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -251,12 +255,22 @@ export default function PatientDetail() {
   const [logPage, setLogPage] = useState(0);
   const [totalLogCount, setTotalLogCount] = useState(0);
   const [logFilter, setLogFilter] = useState<'all' | 'taken' | 'missed' | 'early' | 'on-time' | 'late'>('all');
+  const [dateRangeFilter, setDateRangeFilter] = useState<'all' | 'day' | 'week' | 'month'>('all'); // ADDED: Date Range Filter State
   const LOGS_PER_PAGE = 7;
 
-  // Diary Calendar States (Kept for calendar overview tab parity if needed)
-  const [diaryDate, setDiaryDate] = useState<Date>(new Date());
-  const [diaryViewType, setDiaryViewType] = useState<'Day' | 'Week' | 'Month'>('Week');
-  const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
+  // Formatter for YYYY-MM-DD
+  const formatYMD = (d: Date) => {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  const formatTimeStr = (timeStr: string) => {
+    if (!timeStr) return "--:--";
+    const parts = timeStr.split(':');
+    if (parts.length < 2) return timeStr;
+    const hrs = parseInt(parts[0]);
+    const mins = parts[1];
+    return `${hrs % 12 || 12}:${mins} ${hrs >= 12 ? 'PM' : 'AM'}`;
+  };
 
   // Auto-calculate End Date based on Regimen and Start Date
   useEffect(() => {
@@ -303,7 +317,7 @@ export default function PatientDetail() {
 
   useEffect(() => {
     fetchPaginatedLogs();
-  }, [id, logPage, logFilter]);
+  }, [id, logPage, logFilter, dateRangeFilter]); // Added dateRangeFilter to dependency array
 
   // Real-time synchronization stream pipeline for high precision database updates
   useEffect(() => {
@@ -321,7 +335,7 @@ export default function PatientDetail() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [id, logPage, logFilter]);
+  }, [id, logPage, logFilter, dateRangeFilter]);
 
   const fetchData = async () => {
     try {
@@ -368,6 +382,15 @@ export default function PatientDetail() {
       
       if (vitals?.weight_kg) setCurrentWeight(vitals.weight_kg.toString());
 
+      // Fetch Today's Medication Logs specific to the active patient
+      const todayString = formatYMD(new Date());
+      const { data: tLogs } = await supabase
+        .from('medication_logs')
+        .select('*')
+        .eq('patient_id', id)
+        .eq('log_date', todayString);
+      setTodayLogs(tLogs || []);
+
     } catch (err: any) {
       triggerAlert(t("error"), err.message, "error");
     } finally {
@@ -375,21 +398,37 @@ export default function PatientDetail() {
     }
   };
 
-  // FETCH DIARY RECORDS VIA MANAGED SERVER-SIDE PAGINATION WINDOWS
   const fetchPaginatedLogs = async () => {
     try {
       let query = supabase
         .from('medication_logs')
         .select(`
           id, log_date, time_taken, status, timing_status, created_at,
-          medication:medications(name, dosage, time)
+          medications (name, dosage, time)
         `, { count: 'exact' })
         .eq('patient_id', id);
 
+      // Apply Status Filter
       if (logFilter === 'taken' || logFilter === 'missed') {
         query = query.eq('status', logFilter);
       } else if (logFilter !== 'all') {
         query = query.eq('timing_status', logFilter);
+      }
+
+      // Apply Date Range Filter
+      if (dateRangeFilter !== 'all') {
+        const today = new Date();
+        let startDate = new Date();
+
+        if (dateRangeFilter === 'day') {
+          // Keep startDate as today
+        } else if (dateRangeFilter === 'week') {
+          startDate.setDate(today.getDate() - 7);
+        } else if (dateRangeFilter === 'month') {
+          startDate.setMonth(today.getMonth() - 1);
+        }
+
+        query = query.gte('log_date', formatYMD(startDate)).lte('log_date', formatYMD(today));
       }
 
       const startRange = logPage * LOGS_PER_PAGE;
@@ -662,27 +701,6 @@ export default function PatientDetail() {
     }
   };
 
-  const handlePrevMonth = () => {
-    setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1));
-  };
-  
-  const handleNextMonth = () => {
-    setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1));
-  };
-
-  const formatYMD = (d: Date) => {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  };
-
-  const formatTimeStr = (timeStr: string) => {
-    if (!timeStr) return "--:--";
-    const parts = timeStr.split(':');
-    if (parts.length < 2) return timeStr;
-    const hrs = parseInt(parts[0]);
-    const mins = parts[1];
-    return `${hrs % 12 || 12}:${mins} ${hrs >= 12 ? 'PM' : 'AM'}`;
-  };
-
   const getTimingBadgeColor = (status: string) => {
     switch (status) {
       case 'on-time': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
@@ -690,100 +708,6 @@ export default function PatientDetail() {
       case 'late': return 'bg-amber-50 text-amber-700 border-amber-200';
       default: return 'bg-red-50 text-red-700 border-red-200';
     }
-  };
-
-  const renderCalendarView = () => {
-    if (diaryViewType === 'Month') {
-      const year = calendarMonth.getFullYear();
-      const month = calendarMonth.getMonth();
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      const firstDayOfWeek = new Date(year, month, 1).getDay(); 
-      
-      const days = Array.from({ length: daysInMonth }, (_, i) => new Date(year, month, i + 1));
-      const blanks = Array.from({ length: firstDayOfWeek }, (_, i) => i);
-
-      return (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between px-2">
-            <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="h-8 w-8 hover:bg-slate-100"><ChevronLeft className="h-4 w-4 text-slate-600" /></Button>
-            <span className="font-bold text-sm text-slate-700 uppercase tracking-wide">
-              {calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-            </span>
-            <Button variant="ghost" size="icon" onClick={handleNextMonth} className="h-8 w-8 hover:bg-slate-100"><ChevronRight className="h-4 w-4 text-slate-600" /></Button>
-          </div>
-          <div className="grid grid-cols-7 gap-1 sm:gap-2">
-            {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
-              <div key={d} className="text-center text-[10px] font-bold text-slate-400 py-1">{d}</div>
-            ))}
-            {blanks.map(b => <div key={`blank-${b}`} />)}
-            {days.map(date => {
-              const isSelected = date.getDate() === diaryDate.getDate() && date.getMonth() === diaryDate.getMonth() && date.getFullYear() === diaryDate.getFullYear();
-              const dateStr = formatYMD(date);
-              
-              // Parity logic matching across cached logs
-              const logsForDay = historicalLogs.filter(l => l.log_date === dateStr && l.status === 'taken');
-              const hasActivity = logsForDay.length > 0;
-              
-              return (
-                <div 
-                  key={date.toISOString()}
-                  onClick={() => { setDiaryDate(date); setCalendarMonth(date); }}
-                  className={`aspect-square flex flex-col items-center justify-center p-1 rounded-xl cursor-pointer transition-all border ${isSelected ? 'bg-[#606C38] border-[#606C38] shadow-md text-white' : 'bg-slate-50 border-slate-200 hover:border-[#606C38] text-slate-700'}`}
-                >
-                  <span className={`text-xs font-bold ${isSelected ? 'text-white' : ''}`}>{date.getDate()}</span>
-                  {hasActivity && <div className={`h-1.5 w-1.5 rounded-full mt-1 ${isSelected ? 'bg-white' : 'bg-[#606C38]'}`} />}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      );
-    }
-
-    if (diaryViewType === 'Week') {
-      const weekDays = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(diaryDate);
-        d.setDate(d.getDate() - 3 + i);
-        return d;
-      });
-      return (
-        <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 scrollbar-hide">
-          {weekDays.map((date, index) => {
-            const isSelected = date.getDate() === diaryDate.getDate() && date.getMonth() === diaryDate.getMonth() && date.getFullYear() === diaryDate.getFullYear();
-            return (
-              <div 
-                key={index} 
-                onClick={() => setDiaryDate(date)}
-                className={`min-w-[60px] flex-1 cursor-pointer flex flex-col items-center justify-center p-2 rounded-2xl transition-all border ${isSelected ? 'bg-[#606C38] border-[#606C38] shadow-md' : 'bg-slate-50 border-slate-200 hover:border-[#606C38] hover:bg-[#FEFAE0]/50'}`}
-              >
-                <p className={`text-[10px] font-bold uppercase mb-1 ${isSelected ? 'text-white/80' : 'text-slate-400'}`}>
-                  {date.toLocaleDateString('en-US', { weekday: 'short' })}
-                </p>
-                <p className={`text-lg font-extrabold ${isSelected ? 'text-white' : 'text-slate-800'}`}>
-                  {date.getDate()}
-                </p>
-              </div>
-            );
-          })}
-        </div>
-      );
-    }
-
-    return (
-      <div className="flex justify-center pb-2">
-        <div className="w-32 flex flex-col items-center justify-center p-4 rounded-3xl border bg-[#606C38] border-[#606C38] shadow-lg text-white">
-          <p className="text-xs font-bold uppercase mb-1 text-white/80">
-            {diaryDate.toLocaleDateString('en-US', { weekday: 'long' })}
-          </p>
-          <p className="text-4xl font-extrabold">
-            {diaryDate.getDate()}
-          </p>
-          <p className="text-xs font-medium mt-1 text-white/80">
-            {diaryDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-          </p>
-        </div>
-      </div>
-    );
   };
 
   const getRiskColor = (level: string) => {
@@ -795,12 +719,7 @@ export default function PatientDetail() {
 
   // Safe fetch mapping for trigger cached adherence properties
   const aggregatedAdherenceRate = patient?.adherence_rate ?? 0;
-
-  // =========================================================================
-  // RESTORED UI CALCULATION VARIABLES (Progress, Phases, Account Statuses)
-  // =========================================================================
   const isCured = patient?.status === 'cured' || patient?.status === 'treatment_completed';
-  const isVerified = patient?.status === 'active' || isCured;
 
   let timeProgress = 0;
   let daysLeft = 0;
@@ -818,7 +737,6 @@ export default function PatientDetail() {
     const end = new Date(endDate);
     const today = new Date();
     
-    // Normalize to midnight for accurate day calculation
     start.setHours(0,0,0,0);
     end.setHours(0,0,0,0);
     today.setHours(0,0,0,0);
@@ -839,16 +757,14 @@ export default function PatientDetail() {
       phaseDesc = `Patient is in the Continuation Phase for the ${tbRegimen}.`;
     }
   }
-  // =========================================================================
 
-  const selectedDateStr = formatYMD(diaryDate);
-  const diaryMeds = meds.filter((med) => {
-    const start = new Date(med.start_date);
-    const end = new Date(med.end_date);
-    const sDate = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-    const eDate = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-    const selDate = new Date(diaryDate.getFullYear(), diaryDate.getMonth(), diaryDate.getDate());
-    return selDate >= sDate && selDate <= eDate;
+  // Calculate Today's Active Medications
+  const todayD = new Date();
+  todayD.setHours(0,0,0,0);
+  const activeMedsToday = meds.filter((med) => {
+    const s = new Date(med.start_date); s.setHours(0,0,0,0);
+    const e = new Date(med.end_date); e.setHours(0,0,0,0);
+    return todayD >= s && todayD <= e;
   });
 
   return (
@@ -1134,8 +1050,8 @@ export default function PatientDetail() {
                 </div>
 
                 <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 sm:mt-1">
-                  <Badge variant={isCured ? "default" : (isVerified ? "default" : "outline")} className={`px-3 py-1 font-semibold ${isCured ? "bg-emerald-600 hover:bg-emerald-700 text-white" : (isVerified ? "bg-[#606C38] hover:bg-[#283618] text-white border-none" : "text-slate-600 border-slate-300 bg-slate-100")}`}>
-                    {patient?.status === 'cured' ? t("curedPatient") : (patient?.status === 'treatment_completed' ? t("treatmentCompletedPatient") : (isVerified ? t("verifiedPatient") : t("pendingVerification")))}
+                  <Badge variant="default" className={`px-3 py-1 font-semibold ${isCured ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-[#606C38] hover:bg-[#283618] text-white border-none"}`}>
+                    {patient?.status === 'cured' ? t("curedPatient") : (patient?.status === 'treatment_completed' ? t("treatmentCompletedPatient") : t("verifiedPatient"))}
                   </Badge>
                   <Badge variant="outline" className={`font-bold px-3 py-1 ${isCured ? "bg-slate-100 text-slate-600 border-slate-300" : "bg-[#FEFAE0] text-[#606C38] border-[#DDE5B6]"}`}>
                     {phase}
@@ -1346,19 +1262,41 @@ export default function PatientDetail() {
                     </CardTitle>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Filter className="h-3.5 w-3.5 text-slate-400" />
-                    <select
-                      value={logFilter}
-                      onChange={(e) => { setLogFilter(e.target.value as any); setLogPage(0); }}
-                      className="bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 h-8 px-2.5 focus:outline-none focus:ring-1 focus:ring-[#606C38]"
-                    >
-                      <option value="all">All Logs Registry</option>
-                      <option value="taken">Marked Taken</option>
-                      <option value="missed">Marked Missed</option>
-                      <option value="early">Evaluated: Early</option>
-                      <option value="on-time">Evaluated: On-Time</option>
-                      <option value="late">Evaluated: Late</option>
-                    </select>
+                    {/* ADDED: Date Range Dropdown */}
+                    <div className="flex items-center border border-slate-200 bg-slate-50 rounded-xl overflow-hidden mr-2">
+                      <div className="px-2 border-r border-slate-200 bg-slate-100 flex items-center justify-center h-8">
+                        <Calendar className="h-3.5 w-3.5 text-slate-500" />
+                      </div>
+                      <select
+                        value={dateRangeFilter}
+                        onChange={(e) => { setDateRangeFilter(e.target.value as any); setLogPage(0); }}
+                        className="bg-transparent text-xs font-bold text-slate-700 h-8 px-2 focus:outline-none cursor-pointer"
+                      >
+                        <option value="all">All Dates</option>
+                        <option value="day">Today</option>
+                        <option value="week">Past 7 Days</option>
+                        <option value="month">Past 30 Days</option>
+                      </select>
+                    </div>
+                    
+                    {/* Status Dropdown */}
+                    <div className="flex items-center border border-slate-200 bg-slate-50 rounded-xl overflow-hidden">
+                      <div className="px-2 border-r border-slate-200 bg-slate-100 flex items-center justify-center h-8">
+                        <Filter className="h-3.5 w-3.5 text-slate-500" />
+                      </div>
+                      <select
+                        value={logFilter}
+                        onChange={(e) => { setLogFilter(e.target.value as any); setLogPage(0); }}
+                        className="bg-transparent text-xs font-bold text-slate-700 h-8 px-2 focus:outline-none cursor-pointer"
+                      >
+                        <option value="all">All Statuses</option>
+                        <option value="taken">Marked Taken</option>
+                        <option value="missed">Marked Missed</option>
+                        <option value="early">Evaluated: Early</option>
+                        <option value="on-time">Evaluated: On-Time</option>
+                        <option value="late">Evaluated: Late</option>
+                      </select>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -1385,10 +1323,10 @@ export default function PatientDetail() {
                               {new Date(log.log_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                             </TableCell>
                             <TableCell className="text-xs font-bold text-slate-800">
-                              {log.medication?.name || "Deleted Med"} <span className="text-slate-400 font-medium">({log.medication?.dosage || "N/A"})</span>
+                              {log.medications?.name || "Deleted Med"} <span className="text-slate-400 font-medium">({log.medications?.dosage || "N/A"})</span>
                             </TableCell>
                             <TableCell className="text-xs font-medium text-slate-500">
-                              {log.medication?.time ? log.medication.time : "--:--"}
+                              {log.medications?.time ? log.medications.time : "--:--"}
                             </TableCell>
                             <TableCell className="text-xs font-medium text-slate-600">
                               {log.time_taken ? formatTimeStr(log.time_taken) : "--:--"}
@@ -1437,6 +1375,56 @@ export default function PatientDetail() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* MOVED: Today's Medication Status Card */}
+              {startDate && endDate && (
+                <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white mt-6">
+                  <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between space-y-0">
+                    <CardTitle className="flex items-center gap-2 text-md text-[#283618] font-bold">
+                      <Pill className="h-5 w-5 text-[#606C38]" /> Today's Medication Status
+                    </CardTitle>
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">
+                      {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                    </span>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    {activeMedsToday.length === 0 ? (
+                      <p className="text-sm text-slate-500 italic text-center py-4">No medications scheduled for today.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {activeMedsToday.map(med => {
+                          const log = todayLogs.find(l => l.medication_id.toString() === med.id.toString());
+                          return (
+                            <div key={med.id} className="flex justify-between items-center p-3 border border-slate-100 rounded-xl bg-slate-50">
+                              <div>
+                                <p className="text-sm font-bold text-slate-800">{med.name} <span className="text-slate-500 font-medium">({med.dosage})</span></p>
+                                <p className="text-xs text-slate-500 mt-0.5 font-medium">Target: {med.time}</p>
+                              </div>
+                              <div className="text-right flex flex-col items-end justify-center">
+                                {log && log.status === 'taken' ? (
+                                  <>
+                                    <Badge className="bg-emerald-100 text-emerald-800 border-none uppercase text-[10px] font-bold tracking-wider px-2 py-0.5 mb-1 flex items-center justify-center">
+                                      <CheckCircle2 className="w-3 h-3 mr-1 inline" /> {t("taken")}
+                                    </Badge>
+                                    <span className={`text-[10px] font-bold uppercase tracking-wider block mb-0.5 ${log.timing_status === 'on-time' ? 'text-emerald-600' : (log.timing_status === 'early' ? 'text-blue-600' : 'text-amber-600')}`}>
+                                      {log.timing_status === 'on-time' ? '🎯 On Time' : log.timing_status}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 font-medium block">at {formatTimeStr(log.time_taken)}</span>
+                                  </>
+                                ) : (
+                                  <Badge className="bg-amber-100 text-amber-800 border-none uppercase text-[10px] font-bold tracking-wider px-2 py-0.5 flex items-center justify-center">
+                                    <Activity className="w-3 h-3 mr-1 inline" /> Pending
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
         )}

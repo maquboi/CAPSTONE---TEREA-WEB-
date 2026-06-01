@@ -1,5 +1,4 @@
-import { useState, useEffect } from "react";
-import { supabase } from "../../lib/supabase";
+import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,17 +25,16 @@ export default function AdminProfile() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   
-  // Account Information
+  // Account Information (Phone removed, streamlined for Barangay Admin)
   const [profile, setProfile] = useState({
-    firstName: "Admin", 
-    lastName: "User", 
+    firstName: "Barangay", 
+    lastName: "Admin", 
     email: "admin@terea.ph", 
-    phone: "+63 912 345 6789",
   });
   
   const [passwords, setPasswords] = useState({ current: "", new: "", confirm: "" });
   
-  // Security Settings
+  // Security Settings (Currently UI Only - Requires Supabase MFA Enrollment flow to be fully functional)
   const [is2FAEnabled, setIs2FAEnabled] = useState(false);
   const [lastLogin] = useState(new Date().toISOString());
 
@@ -141,7 +139,7 @@ export default function AdminProfile() {
                 <CardTitle className="text-base font-bold flex items-center gap-2">
                   <UserCircle className="h-5 w-5 text-[#606C38]" /> Administrator Profile
                 </CardTitle>
-                <CardDescription>Update your contact information for system notifications</CardDescription>
+                <CardDescription>Update your display name and recovery email address</CardDescription>
               </CardHeader>
               <CardContent className="pt-6 space-y-5">
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -158,12 +156,11 @@ export default function AdminProfile() {
                   <Label htmlFor="email" className="text-xs font-bold text-slate-500 uppercase tracking-tighter">Official Email Address</Label>
                   <Input id="email" type="email" value={profile.email} className="rounded-xl border-slate-100 bg-slate-50/30" onChange={(e) => setProfile({ ...profile, email: e.target.value })} />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone" className="text-xs font-bold text-slate-500 uppercase tracking-tighter">Mobile Number</Label>
-                  <Input id="phone" value={profile.phone} className="rounded-xl border-slate-100 bg-slate-50/30" onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
-                </div>
+                
+                {/* Phone input has been completely removed from here */}
+
                 <div className="pt-2">
-                  <Button onClick={handleSaveProfile} disabled={loading} className="rounded-xl bg-[#606C38] hover:bg-[#4a542b] font-bold h-11 px-8 shadow-sm">
+                  <Button onClick={handleSaveProfile} disabled={loading} className="rounded-xl bg-[#606C38] hover:bg-[#4a542b] font-bold h-11 px-8 shadow-sm text-white">
                     {loading ? <Loader2 className="animate-spin h-4 w-4" /> : "Save Profile Details"}
                   </Button>
                 </div>
@@ -208,12 +205,12 @@ export default function AdminProfile() {
                     <div className="p-2 bg-blue-100 rounded-lg"><Smartphone className="h-5 w-5 text-blue-600" /></div>
                     <div>
                       <p className="text-sm font-bold text-slate-900">Two-Factor Authentication (2FA)</p>
-                      <p className="text-xs text-slate-500">Receive a secure code on your mobile device during login.</p>
+                      <p className="text-xs text-slate-500">Require an authenticator code during login.</p>
                     </div>
                   </div>
                   <Switch checked={is2FAEnabled} onCheckedChange={(val) => {
                     setIs2FAEnabled(val);
-                    toast({ title: val ? "2FA Activated" : "2FA Disabled" });
+                    toast({ title: val ? "2FA Activated (Mock)" : "2FA Disabled" });
                   }} />
                 </div>
 

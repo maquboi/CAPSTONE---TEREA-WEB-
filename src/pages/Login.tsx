@@ -164,15 +164,15 @@ export default function Login() {
             <div className="grid max-w-xl gap-3 sm:grid-cols-2">
               <div className="auth-info-card">
                 <ShieldCheck className="h-5 w-5 text-[#DDE5B6]" />
-                <span>Role-based access control</span>
+                <span>Clinical Workflow</span>
               </div>
               <div className="auth-info-card">
                 <Stethoscope className="h-5 w-5 text-[#DDE5B6]" />
-                <span>Doctor workflow ready</span>
+                <span>Doctor workflow</span>
               </div>
               <div className="auth-info-card sm:col-span-2">
                 <Building2 className="h-5 w-5 text-[#DDE5B6]" />
-                <span>Built for Municipality of Carmona health operations</span>
+                <span>Municipality of Carmona</span>
               </div>
             </div>
           </div>
