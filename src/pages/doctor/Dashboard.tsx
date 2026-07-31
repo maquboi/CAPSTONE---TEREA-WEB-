@@ -14,9 +14,11 @@ import {
   Copy, 
   Check,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  QrCode // Added QrCode icon
 } from "lucide-react";
 import { useLanguage } from "../admin/LanguageContext";
+import { QRCodeSVG } from "qrcode.react"; // Imported QRCode generator
 
 const translations = {
   en: {
@@ -33,7 +35,9 @@ const translations = {
     loading: "LOADING...",
     okBtn: "Okay",
     error: "Error",
-    copyFailed: "Failed to copy code"
+    copyFailed: "Failed to copy code",
+    showQR: "QR Code",
+    scanQR: "Ask the patient to scan this code with their TEREA app to connect instantly."
   },
   fil: {
     goodMorning: "Magandang umaga",
@@ -49,7 +53,9 @@ const translations = {
     loading: "KINAKARGA...",
     okBtn: "Okay",
     error: "Error",
-    copyFailed: "Hindi nakopya ang code"
+    copyFailed: "Hindi nakopya ang code",
+    showQR: "QR Code",
+    scanQR: "Ipascan ito sa pasyente gamit ang kanilang TEREA app para mabilis na kumonekta."
   }
 };
 
@@ -69,6 +75,7 @@ export default function DoctorDashboard() {
   const [recentActivities, setRecentActivities] = useState<any[]>([]); 
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false); 
+  const [showQR, setShowQR] = useState(false); // State for QR Code modal
 
   const updateStats = async (userId: string) => {
     try {
@@ -168,13 +175,11 @@ export default function DoctorDashboard() {
     if (!textToCopy || textToCopy === t("loading")) return;
 
     try {
-      // Try modern clipboard API first
       await navigator.clipboard.writeText(textToCopy);
       setCopied(true);
       triggerAlert(t("codeCopiedTitle"), `${t("codeCopiedDesc")} ${textToCopy}`, "success");
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      // Fallback for browsers that don't support modern API or block permissions
       try {
         const textArea = document.createElement("textarea");
         textArea.value = textToCopy;
@@ -211,6 +216,36 @@ export default function DoctorDashboard() {
         </DialogPortal>
       </Dialog>
 
+      {/* NEW: QR Code Modal */}
+      <Dialog open={showQR} onOpenChange={setShowQR}>
+        <DialogPortal>
+          <DialogOverlay className="bg-black/40 backdrop-blur-sm" />
+          <DialogContent className="sm:max-w-[400px] rounded-2xl p-6 text-center animate-in fade-in zoom-in-95 duration-200 bg-white border-slate-200 shadow-xl font-sans">
+            <h2 className="text-xl font-bold text-[#2D3B1E] mb-2">{t("clinicalCode")}</h2>
+            <p className="text-slate-500 text-sm mb-8">{t("scanQR")}</p>
+
+            <div className="flex justify-center bg-white p-6 rounded-2xl border-2 border-slate-100 shadow-sm mx-auto w-fit">
+              {doctorData.clinicCode !== t("loading") && (
+                <QRCodeSVG 
+                  value={doctorData.clinicCode} 
+                  size={200} 
+                  level="H" 
+                  fgColor="#2D3B1E" 
+                />
+              )}
+            </div>
+
+            <div className="mt-8 font-mono text-3xl font-extrabold tracking-widest text-[#606C38]">
+              {doctorData.clinicCode}
+            </div>
+
+            <Button className="mt-8 w-full rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold" onClick={() => setShowQR(false)}>
+              Close
+            </Button>
+          </DialogContent>
+        </DialogPortal>
+      </Dialog>
+
       <div className="space-y-6 animate-fade-in">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -223,13 +258,20 @@ export default function DoctorDashboard() {
           </div>
 
           {!loading && (
-            <div className="dashboard-surface flex items-center gap-3 rounded-xl border-[#DDE5B6] p-2 pr-4">
-              <div className="flex flex-col">
+            <div className="dashboard-surface flex items-center gap-3 rounded-xl border-[#DDE5B6] p-2 pr-2">
+              <div className="flex flex-col pl-2">
                 <span className="text-[10px] uppercase font-bold text-[#606C38]/70 tracking-wider">{t("clinicalCode")}</span>
                 <span className="font-mono text-lg font-bold text-[#2D3B1E] tracking-wide">{doctorData.clinicCode}</span>
               </div>
-              <div className="h-8 w-[1px] bg-[#DDE5B6] mx-2"></div>
-              <Button variant="ghost" size="sm" className="h-8 gap-2 text-[#606C38]" onClick={handleCopyCode}>
+              <div className="h-8 w-[1px] bg-[#DDE5B6] mx-1"></div>
+              
+              {/* QR Code Button */}
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-[#606C38] hover:bg-[#606C38]/10" onClick={() => setShowQR(true)} title={t("showQR")}>
+                <QrCode className="h-4 w-4" />
+              </Button>
+              
+              {/* Copy Button */}
+              <Button variant="ghost" size="sm" className="h-8 gap-2 pr-3 pl-2 text-[#606C38] hover:bg-[#606C38]/10" onClick={handleCopyCode}>
                 {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                 {copied ? t("copied") : t("copy")}
               </Button>

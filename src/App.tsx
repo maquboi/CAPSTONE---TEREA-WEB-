@@ -22,6 +22,7 @@ import ErrorLogs from "./pages/admin/ErrorLogs";
 import AdminProfile from "./pages/admin/Profile";
 import AdminSettings from "./pages/admin/Settings";
 import ITSupport from "./pages/admin/ITSupport";
+import FaqManagement from "./pages/admin/FaqManagement";
 
 // Doctor Pages
 import DoctorDashboard from "./pages/doctor/Dashboard";
@@ -56,6 +57,7 @@ const App = () => (
             <Route path="/admin/audit-logs" element={<AuditLogs />} />
             <Route path="/admin/error-logs" element={<ErrorLogs />} />
             <Route path="/admin/support-tickets" element={<ITSupport />} /> 
+            <Route path="/admin/faq" element={<FaqManagement />} />
             <Route path="/admin/profile" element={<AdminProfile />} />
             <Route path="/admin/settings" element={<AdminSettings />} />
             
