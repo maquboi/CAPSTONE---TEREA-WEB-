@@ -34,19 +34,18 @@ import {
   Wand2,
   Trash2,
   SendHorizontal,
-  Stethoscope,
   User,
   FileCheck2,
   Scale,
   Info,
   Edit,
-  X,
   ChevronLeft,
   ChevronRight,
   Mail,
   Phone,
   Filter,
-  Calendar
+  Calendar,
+  ClipboardList
 } from "lucide-react";
 import { useLanguage } from "../admin/LanguageContext";
 
@@ -217,6 +216,7 @@ export default function PatientDetail() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingWeight, setSavingWeight] = useState(false);
+  const [savingDoh, setSavingDoh] = useState(false);
   const [prescribing, setPrescribing] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [postingMemo, setPostingMemo] = useState(false);
@@ -237,8 +237,12 @@ export default function PatientDetail() {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
   
-  // NEW: State to store Today's Medication Logs for the real-time overview card
   const [todayLogs, setTodayLogs] = useState<any[]>([]);
+
+  // DOH Form 4 Tracking Fields
+  const [registrationGroup, setRegistrationGroup] = useState("");
+  const [anatomicalSite, setAnatomicalSite] = useState("");
+  const [dssmResults, setDssmResults] = useState({ month0: "", month2: "", month3: "", month4: "", month5: "", month6: "" });
 
   const [tbRegimen, setTbRegimen] = useState("6-Month DOTS");
   const [startDate, setStartDate] = useState("");
@@ -250,15 +254,14 @@ export default function PatientDetail() {
   const [newMed, setNewMed] = useState({ name: "", dosage: "", time: "08:00", start: "", end: "" });
   const [editingMedId, setEditingMedId] = useState<number | null>(null); 
   
-  // SCALABLE SERVER-SIDE HISTORICAL MEDICATION LEDGER ENGINE
+  // Historical Log Engine
   const [historicalLogs, setHistoricalLogs] = useState<any[]>([]);
   const [logPage, setLogPage] = useState(0);
   const [totalLogCount, setTotalLogCount] = useState(0);
   const [logFilter, setLogFilter] = useState<'all' | 'taken' | 'missed' | 'early' | 'on-time' | 'late'>('all');
-  const [dateRangeFilter, setDateRangeFilter] = useState<'all' | 'day' | 'week' | 'month'>('all'); // ADDED: Date Range Filter State
+  const [dateRangeFilter, setDateRangeFilter] = useState<'all' | 'day' | 'week' | 'month'>('all'); 
   const LOGS_PER_PAGE = 7;
 
-  // Formatter for YYYY-MM-DD
   const formatYMD = (d: Date) => {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   };
@@ -272,7 +275,6 @@ export default function PatientDetail() {
     return `${hrs % 12 || 12}:${mins} ${hrs >= 12 ? 'PM' : 'AM'}`;
   };
 
-  // Auto-calculate End Date based on Regimen and Start Date
   useEffect(() => {
     if (startDate && tbRegimen) {
       const start = new Date(startDate);
@@ -317,9 +319,8 @@ export default function PatientDetail() {
 
   useEffect(() => {
     fetchPaginatedLogs();
-  }, [id, logPage, logFilter, dateRangeFilter]); // Added dateRangeFilter to dependency array
+  }, [id, logPage, logFilter, dateRangeFilter]);
 
-  // Real-time synchronization stream pipeline for high precision database updates
   useEffect(() => {
     const channel = supabase
       .channel(`med-logs-parity-${id}`)
@@ -354,6 +355,10 @@ export default function PatientDetail() {
       if (profile?.treatment_start_date) setStartDate(profile.treatment_start_date);
       if (profile?.treatment_end_date) setEndDate(profile.treatment_end_date);
       if (profile?.tb_regimen) setTbRegimen(profile.tb_regimen);
+      
+      if (profile?.registration_group) setRegistrationGroup(profile.registration_group);
+      if (profile?.disease_anatomical_site) setAnatomicalSite(profile.disease_anatomical_site);
+      if (profile?.dssm_monitoring) setDssmResults(profile.dssm_monitoring);
 
       const { data: medications } = await supabase.from('medications').select('*').eq('user_id', id);
       setMeds(medications || []);
@@ -382,7 +387,6 @@ export default function PatientDetail() {
       
       if (vitals?.weight_kg) setCurrentWeight(vitals.weight_kg.toString());
 
-      // Fetch Today's Medication Logs specific to the active patient
       const todayString = formatYMD(new Date());
       const { data: tLogs } = await supabase
         .from('medication_logs')
@@ -408,20 +412,17 @@ export default function PatientDetail() {
         `, { count: 'exact' })
         .eq('patient_id', id);
 
-      // Apply Status Filter
       if (logFilter === 'taken' || logFilter === 'missed') {
         query = query.eq('status', logFilter);
       } else if (logFilter !== 'all') {
         query = query.eq('timing_status', logFilter);
       }
 
-      // Apply Date Range Filter
       if (dateRangeFilter !== 'all') {
         const today = new Date();
         let startDate = new Date();
 
         if (dateRangeFilter === 'day') {
-          // Keep startDate as today
         } else if (dateRangeFilter === 'week') {
           startDate.setDate(today.getDate() - 7);
         } else if (dateRangeFilter === 'month') {
@@ -472,6 +473,34 @@ export default function PatientDetail() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSaveDohForm = async () => {
+    setSavingDoh(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          registration_group: registrationGroup,
+          disease_anatomical_site: anatomicalSite,
+          dssm_monitoring: dssmResults
+        })
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      createAuditLog("Updated DOH Form 4", "Clinical Update", patient.full_name, { registrationGroup, anatomicalSite });
+      triggerAlert("Success", "DOH Form 4 Classifications updated successfully.", "success");
+      fetchData();
+    } catch(err: any) {
+      triggerAlert("Error", err.message, "error");
+    } finally {
+      setSavingDoh(false);
+    }
+  };
+
+  const handleDssmChange = (month: string, value: string) => {
+    setDssmResults(prev => ({ ...prev, [month]: value }));
   };
 
   const handleSaveWeight = async () => {
@@ -717,7 +746,6 @@ export default function PatientDetail() {
     return "bg-emerald-100 text-emerald-800 border-emerald-200";
   };
 
-  // Safe fetch mapping for trigger cached adherence properties
   const aggregatedAdherenceRate = patient?.adherence_rate ?? 0;
   const isCured = patient?.status === 'cured' || patient?.status === 'treatment_completed';
 
@@ -758,7 +786,6 @@ export default function PatientDetail() {
     }
   }
 
-  // Calculate Today's Active Medications
   const todayD = new Date();
   todayD.setHours(0,0,0,0);
   const activeMedsToday = meds.filter((med) => {
@@ -770,7 +797,6 @@ export default function PatientDetail() {
   return (
     <DashboardLayout role="doctor" userName={doctorName || "Doctor"}>
       
-      {/* Centralized Notification Pop-up */}
       <Dialog open={alert.open} onOpenChange={(open) => setAlert({...alert, open})}>
         <DialogContent className="sm:max-w-[400px] rounded-2xl p-6 text-center animate-in fade-in zoom-in-95 duration-200 bg-white border-slate-200 shadow-xl font-sans print:hidden">
           <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${alert.type === 'success' ? 'bg-[#DDE5B6]' : 'bg-slate-200'}`}>
@@ -786,7 +812,6 @@ export default function PatientDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* Extracted Weight Update Modal */}
       <Dialog open={weightModalOpen} onOpenChange={setWeightModalOpen}>
         <DialogContent className="sm:max-w-[400px] rounded-2xl p-6 bg-white font-sans">
           <DialogHeader>
@@ -814,7 +839,6 @@ export default function PatientDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* Extracted Memo Modal */}
       <Dialog open={memoModalOpen} onOpenChange={setMemoModalOpen}>
         <DialogContent className="sm:max-w-[420px] rounded-2xl p-6 bg-white font-sans">
           <DialogHeader>
@@ -845,7 +869,6 @@ export default function PatientDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* Extracted Prescription Add/Edit Modal */}
       <Dialog open={prescriptionModalOpen} onOpenChange={(open) => {
         setPrescriptionModalOpen(open);
         if(!open) handleCancelEdit();
@@ -893,7 +916,6 @@ export default function PatientDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* Discharge Classification Picker Modal */}
       <Dialog open={dischargeModalOpen} onOpenChange={setDischargeModalOpen}>
         <DialogContent className="sm:max-w-[500px] rounded-2xl p-6 bg-white font-sans">
           <DialogHeader>
@@ -944,7 +966,6 @@ export default function PatientDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* Safety Check Double-Confirmation Pop-up Modal */}
       <Dialog open={confirmSafetyModalOpen} onOpenChange={setConfirmSafetyModalOpen}>
         <DialogContent className="sm:max-w-[400px] rounded-2xl p-6 bg-white font-sans border border-slate-200 shadow-xl">
           <div className="mx-auto w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-4">
@@ -980,7 +1001,6 @@ export default function PatientDetail() {
 
       <div className="space-y-6 animate-fade-in pb-10 print:hidden">
         
-        {/* Header Actions */}
         <div className="flex items-center justify-between">
           <Button variant="ghost" onClick={() => navigate(-1)} className="gap-2 text-[#606C38] hover:bg-[#FEFAE0] rounded-xl px-4">
             <ArrowLeft className="h-4 w-4" /> {t("backBtn")}
@@ -997,7 +1017,6 @@ export default function PatientDetail() {
           )}
         </div>
 
-        {/* Phase Alert Banner */}
         {!isCured && startDate && endDate && (
           <div className={`rounded-xl border p-4 flex items-start gap-4 shadow-sm ${phaseColor}`}>
             <Info className="h-6 w-6 mt-0.5 shrink-0" />
@@ -1008,7 +1027,6 @@ export default function PatientDetail() {
           </div>
         )}
 
-        {/* TOP SECTION: Unified Patient Info Header Card */}
         <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
           <CardContent className="p-6 sm:p-8 flex flex-col sm:flex-row items-center sm:items-start gap-6 sm:gap-8">
             
@@ -1081,7 +1099,7 @@ export default function PatientDetail() {
             onClick={() => setActiveTab('clinical')} 
             className={`rounded-xl px-5 font-bold transition-all ${activeTab === 'clinical' ? 'bg-[#606C38] text-white hover:bg-[#283618] shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}
           >
-            Medical & Prescriptions
+            Clinical & Prescriptions
           </Button>
           <Button 
             variant={activeTab === 'roadmap' ? 'default' : 'ghost'} 
@@ -1096,7 +1114,6 @@ export default function PatientDetail() {
         {activeTab === 'overview' && (
           <div className="grid gap-6 lg:grid-cols-3 animate-fade-in">
             <div className="space-y-6 lg:col-span-1">
-              {/* Vitals Card */}
               <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
                 <CardHeader className="pb-3 border-b border-slate-100">
                   <CardTitle className="flex items-center justify-between text-md text-[#283618] font-bold">
@@ -1120,7 +1137,6 @@ export default function PatientDetail() {
                 </CardContent>
               </Card>
 
-              {/* Patient Reports Card */}
               <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
                 <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between space-y-0">
                   <CardTitle className="flex items-center gap-2 text-md text-[#283618] font-bold">
@@ -1158,7 +1174,6 @@ export default function PatientDetail() {
             </div>
 
             <div className="space-y-6 lg:col-span-2">
-              {/* Progress Summary Card */}
               {startDate && endDate ? (
                 <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
                   <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between space-y-0">
@@ -1210,7 +1225,7 @@ export default function PatientDetail() {
         {activeTab === 'clinical' && (
           <div className="grid gap-6 lg:grid-cols-3 animate-fade-in">
             <div className="space-y-6 lg:col-span-1">
-              {/* Prescriptions Card */}
+              
               <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white flex flex-col h-full">
                 <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between space-y-0">
                   <CardTitle className="text-md font-bold flex items-center gap-2 text-[#283618]">
@@ -1252,8 +1267,86 @@ export default function PatientDetail() {
               </Card>
             </div>
             
-            {/* Right Side Column: Server-Side Scalable Transaction Ledger History */}
             <div className="space-y-6 lg:col-span-2">
+              {/* --- NEW: DOH FORM 4 CLASSIFICATION CARD --- */}
+              <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
+                <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between space-y-0 bg-[#F4F7F4]/50 rounded-t-2xl">
+                  <CardTitle className="text-md font-bold flex items-center gap-2 text-[#283618]">
+                    <ClipboardList className="h-5 w-5 text-[#606C38]" /> DOH TB Form 4 Classifications
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-5 space-y-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Registration Group</Label>
+                      <select 
+                        className="w-full bg-slate-50 border border-slate-200 text-sm font-medium text-slate-700 rounded-xl h-11 px-3 focus:outline-none focus:ring-2 focus:ring-[#606C38]"
+                        value={registrationGroup}
+                        onChange={(e) => setRegistrationGroup(e.target.value)}
+                        disabled={isCured}
+                      >
+                        <option value="">Select Group...</option>
+                        <option value="New">New</option>
+                        <option value="Relapse">Relapse</option>
+                        <option value="Treatment After Failure">Treatment After Failure</option>
+                        <option value="Treatment After Default">Treatment After Default</option>
+                        <option value="Transfer-in">Transfer-in</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Disease Anatomical Site</Label>
+                      <select 
+                        className="w-full bg-slate-50 border border-slate-200 text-sm font-medium text-slate-700 rounded-xl h-11 px-3 focus:outline-none focus:ring-2 focus:ring-[#606C38]"
+                        value={anatomicalSite}
+                        onChange={(e) => setAnatomicalSite(e.target.value)}
+                        disabled={isCured}
+                      >
+                        <option value="">Select Site...</option>
+                        <option value="Pulmonary">Pulmonary (PTB)</option>
+                        <option value="Extra-pulmonary">Extra-pulmonary (EPTB)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">DSSM Sputum Monitoring (Results)</Label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+                      {['month0', 'month2', 'month3', 'month4', 'month5', 'month6'].map((monthKey) => {
+                        const monthLabel = monthKey === 'month0' ? 'Month 0' : `Month ${monthKey.replace('month', '')}`;
+                        return (
+                          <div key={monthKey} className="flex flex-col gap-1 border border-slate-100 bg-slate-50 rounded-lg p-2 text-center">
+                            <span className="text-[10px] font-bold text-slate-500">{monthLabel}</span>
+                            <select 
+                              className="w-full bg-white border border-slate-200 text-xs font-medium text-slate-700 rounded h-8 px-1 focus:outline-none focus:border-[#606C38]"
+                              value={(dssmResults as any)[monthKey] || ""}
+                              onChange={(e) => handleDssmChange(monthKey, e.target.value)}
+                              disabled={isCured}
+                            >
+                              <option value="">-</option>
+                              <option value="Negative">0 (Neg)</option>
+                              <option value="1+">+</option>
+                              <option value="2+">++</option>
+                              <option value="3+">+++</option>
+                              <option value="Not Done">N/D</option>
+                            </select>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {!isCured && (
+                    <div className="pt-2 border-t border-slate-100 flex justify-end">
+                      <Button onClick={handleSaveDohForm} className="bg-[#606C38] hover:bg-[#283618] text-white rounded-xl h-10 font-semibold px-6" disabled={savingDoh}>
+                        {savingDoh ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />} Save DOH Data
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Medication Logs & Adherence History Card */}
               <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
                 <CardHeader className="pb-3 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 space-y-0">
                   <div>
@@ -1262,7 +1355,6 @@ export default function PatientDetail() {
                     </CardTitle>
                   </div>
                   <div className="flex items-center gap-2">
-                    {/* ADDED: Date Range Dropdown */}
                     <div className="flex items-center border border-slate-200 bg-slate-50 rounded-xl overflow-hidden mr-2">
                       <div className="px-2 border-r border-slate-200 bg-slate-100 flex items-center justify-center h-8">
                         <Calendar className="h-3.5 w-3.5 text-slate-500" />
@@ -1279,7 +1371,6 @@ export default function PatientDetail() {
                       </select>
                     </div>
                     
-                    {/* Status Dropdown */}
                     <div className="flex items-center border border-slate-200 bg-slate-50 rounded-xl overflow-hidden">
                       <div className="px-2 border-r border-slate-200 bg-slate-100 flex items-center justify-center h-8">
                         <Filter className="h-3.5 w-3.5 text-slate-500" />
@@ -1347,7 +1438,6 @@ export default function PatientDetail() {
                     </Table>
                   </div>
 
-                  {/* Server-Side Pagination Controller Footer */}
                   <div className="p-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/50 rounded-b-2xl">
                     <span className="text-xs text-slate-500 font-bold">
                       Showing {historicalLogs.length > 0 ? (logPage * LOGS_PER_PAGE) + 1 : 0} - {Math.min((logPage * LOGS_PER_PAGE) + LOGS_PER_PAGE, totalLogCount)} of {totalLogCount} records
@@ -1376,7 +1466,6 @@ export default function PatientDetail() {
                 </CardContent>
               </Card>
 
-              {/* MOVED: Today's Medication Status Card */}
               {startDate && endDate && (
                 <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white mt-6">
                   <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between space-y-0">
@@ -1433,7 +1522,6 @@ export default function PatientDetail() {
         {activeTab === 'roadmap' && (
           <div className="grid gap-6 lg:grid-cols-3 animate-fade-in">
             <div className="space-y-6 lg:col-span-1">
-              {/* Roadmap Configuration */}
               <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
                 <CardHeader className="pb-3 border-b border-slate-100">
                   <CardTitle className="flex items-center gap-2 text-lg text-[#283618] font-bold">
@@ -1488,7 +1576,6 @@ export default function PatientDetail() {
             </div>
 
             <div className="space-y-6 lg:col-span-2">
-              {/* Milestones Card */}
               <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white flex flex-col h-full">
                 <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between space-y-0">
                   <CardTitle className="text-md font-bold flex items-center gap-2 text-[#283618]">

@@ -14,12 +14,11 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { 
-  Search, Filter, Eye, Download, History, ShieldAlert, Loader2, 
+  Search, Filter, Eye, Download, Loader2, 
   ArrowUpDown, ChevronLeft, ChevronRight, Trash2, FileText, FileSpreadsheet, MoreHorizontal, CheckCircle, AlertCircle
 } from "lucide-react";
 import {
@@ -264,6 +263,8 @@ export default function AuditLogs() {
             </SelectTrigger>
             <SelectContent className="rounded-xl">
               <SelectItem value="all">{t("allCategories")}</SelectItem>
+              <SelectItem value="Clinical Update">Clinical Update</SelectItem> {/* NEW: For DOH Form 4 Updates */}
+              <SelectItem value="Treatment Lifecycle">Treatment Lifecycle</SelectItem> {/* NEW: For Discharge & Cured Events */}
               <SelectItem value="Patient Access">{t("patientAccess")}</SelectItem>
               <SelectItem value="User Management">{t("userMgmtFilter")}</SelectItem>
               <SelectItem value="Keywords">{t("keywords")}</SelectItem>
@@ -427,5 +428,3 @@ export default function AuditLogs() {
     </DashboardLayout>
   );
 }
-
-function cn(...classes: any[]) { return classes.filter(Boolean).join(' '); }
