@@ -358,7 +358,25 @@ export default function PatientDetail() {
       
       if (profile?.registration_group) setRegistrationGroup(profile.registration_group);
       if (profile?.disease_anatomical_site) setAnatomicalSite(profile.disease_anatomical_site);
-      if (profile?.dssm_monitoring) setDssmResults(profile.dssm_monitoring);
+
+      // Fetch DSSM Sputum Results from the dedicated dssm_monitoring table
+      const { data: dssmLogs } = await supabase
+        .from('dssm_monitoring')
+        .select('milestone_month, result')
+        .eq('patient_id', id);
+
+      if (dssmLogs && dssmLogs.length > 0) {
+        const mappedResults = { month0: "", month2: "", month3: "", month4: "", month5: "", month6: "" };
+        dssmLogs.forEach((item: any) => {
+          const key = item.milestone_month === 'Month 0' 
+            ? 'month0' 
+            : `month${item.milestone_month.replace('Month ', '')}`;
+          if (key in mappedResults) {
+            (mappedResults as any)[key] = item.result;
+          }
+        });
+        setDssmResults(mappedResults);
+      }
 
       const { data: medications } = await supabase.from('medications').select('*').eq('user_id', id);
       setMeds(medications || []);
@@ -478,21 +496,40 @@ export default function PatientDetail() {
   const handleSaveDohForm = async () => {
     setSavingDoh(true);
     try {
-      const { error } = await supabase
+      // 1. Update Profile Fields (registration_group and disease_anatomical_site)
+      const { error: profileErr } = await supabase
         .from('profiles')
         .update({
           registration_group: registrationGroup,
           disease_anatomical_site: anatomicalSite,
-          dssm_monitoring: dssmResults
         })
         .eq('id', id);
-      
-      if (error) throw error;
-      
-      createAuditLog("Updated DOH Form 4", "Clinical Update", patient.full_name, { registrationGroup, anatomicalSite });
+
+      if (profileErr) throw profileErr;
+
+      // 2. Clear existing entries to prevent unique constraint conflicts, then insert new ones
+      await supabase.from('dssm_monitoring').delete().eq('patient_id', id);
+
+      const dssmEntries = Object.entries(dssmResults)
+        .filter(([_, result]) => result !== "")
+        .map(([monthKey, result]) => {
+          const milestoneMonth = monthKey === 'month0' ? 'Month 0' : `Month ${monthKey.replace('month', '')}`;
+          return {
+            patient_id: id,
+            milestone_month: milestoneMonth,
+            result: result,
+          };
+        });
+
+      if (dssmEntries.length > 0) {
+        const { error: dssmErr } = await supabase.from('dssm_monitoring').insert(dssmEntries);
+        if (dssmErr) throw dssmErr;
+      }
+
+      createAuditLog("Updated DOH Form 4", "Clinical Update", patient?.full_name || "Patient", { registrationGroup, anatomicalSite, dssmResults });
       triggerAlert("Success", "DOH Form 4 Classifications updated successfully.", "success");
       fetchData();
-    } catch(err: any) {
+    } catch (err: any) {
       triggerAlert("Error", err.message, "error");
     } finally {
       setSavingDoh(false);
