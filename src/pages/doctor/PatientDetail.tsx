@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -45,8 +45,21 @@ import {
   Phone,
   Filter,
   Calendar,
-  ClipboardList
+  ClipboardList,
+  X
 } from "lucide-react";
+import { 
+  LineChart, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer 
+} from 'recharts';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup
+} from "@/components/ui/select";
 import { useLanguage } from "../admin/LanguageContext";
 
 const translations: Record<string, Record<string, string>> = {
@@ -111,7 +124,7 @@ const translations: Record<string, Record<string, string>> = {
     syncFailed: "Sync Failed",
     patientVitals: "Patient Vitals",
     weight: "Current Weight (kg)",
-    updateWeight: "Update Weight",
+    updateWeight: "Add New Record",
     weightSaved: "Weight Updated",
     medicationDiary: "Medication Diary (Logs)",
     editMed: "Edit Med",
@@ -184,7 +197,7 @@ const translations: Record<string, Record<string, string>> = {
     syncFailed: "Error sa Pag-sync",
     patientVitals: "Vitals ng Pasyente",
     weight: "Kasalukuyang Timbang (kg)",
-    updateWeight: "I-update ang Timbang",
+    updateWeight: "Magdagdag ng Bagong Record",
     weightSaved: "Na-update ang Timbang",
     medicationDiary: "Diary ng Gamot (Logs)",
     editMed: "I-edit",
@@ -197,6 +210,19 @@ const translations: Record<string, Record<string, string>> = {
     cancelEdit: "Kanselahin",
   }
 };
+
+const STANDARD_TB_DRUGS = [
+  "Isoniazid (H)",
+  "Rifampicin (R)",
+  "Pyrazinamide (Z)",
+  "Ethambutol (E)",
+  "FDC (Rifampicin + Isoniazid + Pyrazinamide + Ethambutol)",
+  "FDC (Rifampicin + Isoniazid)",
+  "Bedaquiline (B)",
+  "Pretomanid (Pa)",
+  "Linezolid (L)",
+  "Moxifloxacin (M)"
+];
 
 export default function PatientDetail() {
   const { id } = useParams();
@@ -237,12 +263,18 @@ export default function PatientDetail() {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
   
+  // Weight Tracker States
+  const [vitalsHistory, setVitalsHistory] = useState<any[]>([]);
+  const [editingVitalId, setEditingVitalId] = useState<string | null>(null);
+  const [editingVitalWeight, setEditingVitalWeight] = useState<string>("");
+  
   const [todayLogs, setTodayLogs] = useState<any[]>([]);
 
   // DOH Form 4 Tracking Fields
   const [registrationGroup, setRegistrationGroup] = useState("");
   const [anatomicalSite, setAnatomicalSite] = useState("");
   const [dssmResults, setDssmResults] = useState({ month0: "", month2: "", month3: "", month4: "", month5: "", month6: "" });
+  const [dohLastSynced, setDohLastSynced] = useState<any>(null);
 
   const [tbRegimen, setTbRegimen] = useState("6-Month DOTS");
   const [startDate, setStartDate] = useState("");
@@ -251,7 +283,7 @@ export default function PatientDetail() {
   const [currentWeight, setCurrentWeight] = useState("");
   const [doctorName, setDoctorName] = useState("");
 
-  const [newMed, setNewMed] = useState({ name: "", dosage: "", time: "08:00", start: "", end: "" });
+  const [newMed, setNewMed] = useState({ name: "", dosage: "", time: "08:00", start: "", end: "", isCustomName: false });
   const [editingMedId, setEditingMedId] = useState<number | null>(null); 
   
   // Historical Log Engine
@@ -261,6 +293,27 @@ export default function PatientDetail() {
   const [logFilter, setLogFilter] = useState<'all' | 'taken' | 'missed' | 'early' | 'on-time' | 'late'>('all');
   const [dateRangeFilter, setDateRangeFilter] = useState<'all' | 'day' | 'week' | 'month'>('all'); 
   const LOGS_PER_PAGE = 7;
+
+  // --- SMART INTELLIGENCE LOGIC ---
+  const checkSmartAlert = (text: string) => {
+    const keywords = ['vision', 'blur', 'numb', 'yellow', 'jaundice', 'pain', 'rash', 'itch', 'vomit', 'nausea', 'hearing', 'ringing', 'dizzy', 'seizure', 'joint', 'tingling', 'blood'];
+    const lowerText = text.toLowerCase();
+    return keywords.some(kw => lowerText.includes(kw));
+  };
+
+  const isSputumConverted = useMemo(() => {
+    const m0 = dssmResults.month0;
+    const m2 = dssmResults.month2;
+    const positives = ["1+", "2+", "3+"];
+    return positives.includes(m0) && m2 === "Negative";
+  }, [dssmResults]);
+
+  const weightChartData = useMemo(() => {
+    return [...vitalsHistory].reverse().map(v => ({
+        date: new Date(v.recorded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        weight: v.weight_kg
+    }));
+  }, [vitalsHistory]);
 
   const formatYMD = (d: Date) => {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -378,8 +431,20 @@ export default function PatientDetail() {
         setDssmResults(mappedResults);
       }
 
+      // Fetch Latest Audit Log for DOH Form
+      const { data: auditData } = await supabase
+        .from('audit_logs')
+        .select('created_at, user_name')
+        .eq('action_name', 'Updated DOH Form 4')
+        .eq('target_entity', profile.full_name)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (auditData) setDohLastSynced(auditData);
+
+      // Fetch Active (Non-Archived) Medications
       const { data: medications } = await supabase.from('medications').select('*').eq('user_id', id);
-      setMeds(medications || []);
+      setMeds((medications || []).filter(m => !m.is_archived));
 
       const { data: appts } = await supabase
         .from('roadmap')
@@ -395,15 +460,20 @@ export default function PatientDetail() {
         .order('created_at', { ascending: false });
       setNotes(patientNotes || []);
 
-      const { data: vitals } = await supabase
+      // Fetch Vitals History
+      const { data: vitalsLogs } = await supabase
         .from('patient_vitals')
-        .select('weight_kg')
+        .select('id, weight_kg, recorded_at')
         .eq('patient_id', id)
-        .order('recorded_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order('recorded_at', { ascending: false });
       
-      if (vitals?.weight_kg) setCurrentWeight(vitals.weight_kg.toString());
+      if (vitalsLogs && vitalsLogs.length > 0) {
+        setCurrentWeight(vitalsLogs[0].weight_kg.toString());
+        setVitalsHistory(vitalsLogs);
+      } else {
+        setCurrentWeight("");
+        setVitalsHistory([]);
+      }
 
       const todayString = formatYMD(new Date());
       const { data: tLogs } = await supabase
@@ -496,7 +566,7 @@ export default function PatientDetail() {
   const handleSaveDohForm = async () => {
     setSavingDoh(true);
     try {
-      // 1. Update Profile Fields (registration_group and disease_anatomical_site)
+      // 1. Update Profile Fields
       const { error: profileErr } = await supabase
         .from('profiles')
         .update({
@@ -556,6 +626,28 @@ export default function PatientDetail() {
       triggerAlert(t("error"), err.message, "error");
     } finally {
       setSavingWeight(false);
+    }
+  };
+
+  const handleDeleteVital = async (vitalId: string) => {
+    try {
+      await supabase.from('patient_vitals').delete().eq('id', vitalId);
+      triggerAlert("Success", "Weight record deleted successfully.", "success");
+      fetchData();
+    } catch (err: any) {
+      triggerAlert("Error", err.message, "error");
+    }
+  };
+
+  const handleUpdateVital = async (vitalId: string) => {
+    if (!editingVitalWeight) return;
+    try {
+      await supabase.from('patient_vitals').update({ weight_kg: parseFloat(editingVitalWeight) }).eq('id', vitalId);
+      triggerAlert("Success", "Weight record updated successfully.", "success");
+      setEditingVitalId(null);
+      fetchData();
+    } catch (err: any) {
+      triggerAlert("Error", err.message, "error");
     }
   };
 
@@ -656,7 +748,7 @@ export default function PatientDetail() {
         triggerAlert(t("success"), t("prescriptionAdded"), "success");
       }
       
-      setNewMed({ name: "", dosage: "", time: "08:00", start: "", end: "" });
+      setNewMed({ name: "", dosage: "", time: "08:00", start: "", end: "", isCustomName: false });
       setEditingMedId(null);
       setPrescriptionModalOpen(false);
       fetchData();
@@ -682,25 +774,30 @@ export default function PatientDetail() {
       }
     } catch(e) {}
 
+    const isStandard = STANDARD_TB_DRUGS.includes(med.name);
+
     setNewMed({
       name: med.name,
       dosage: med.dosage,
       time: timeInput,
       start: med.start_date.split('T')[0],
-      end: med.end_date.split('T')[0]
+      end: med.end_date.split('T')[0],
+      isCustomName: !isStandard
     });
     setPrescriptionModalOpen(true);
   };
 
   const handleCancelEdit = () => {
     setEditingMedId(null);
-    setNewMed({ name: "", dosage: "", time: "08:00", start: "", end: "" });
+    setNewMed({ name: "", dosage: "", time: "08:00", start: "", end: "", isCustomName: false });
     setPrescriptionModalOpen(false);
   };
 
+  // --- SMART SOFT DELETE IMPLEMENTATION ---
   const handleDeletePrescription = async (medId: number) => {
     try {
-      await supabase.from('medications').delete().eq('id', medId);
+      // Soft Delete: Archive it so past patient logs don't break
+      await supabase.from('medications').update({ is_archived: true }).eq('id', medId);
       triggerAlert(t("success"), t("prescriptionRemoved"), "success");
       fetchData();
     } catch (err: any) {
@@ -825,10 +922,17 @@ export default function PatientDetail() {
 
   const todayD = new Date();
   todayD.setHours(0,0,0,0);
-  const activeMedsToday = meds.filter((med) => {
+  
+  // Dynamic Medication Filtering based on dates
+  const activeMeds = meds.filter((med) => {
     const s = new Date(med.start_date); s.setHours(0,0,0,0);
     const e = new Date(med.end_date); e.setHours(0,0,0,0);
     return todayD >= s && todayD <= e;
+  });
+
+  const pastMeds = meds.filter((med) => {
+    const e = new Date(med.end_date); e.setHours(0,0,0,0);
+    return todayD > e;
   });
 
   return (
@@ -923,7 +1027,34 @@ export default function PatientDetail() {
           <div className="grid grid-cols-2 gap-4 py-4">
             <div className="col-span-2">
               <Label className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1 block">{t("medName")}</Label>
-              <Input placeholder={t("medName")} className="h-10 text-sm bg-slate-50 border-slate-200 rounded-lg focus-visible:ring-[#606C38]" value={newMed.name} onChange={(e) => setNewMed({...newMed, name: e.target.value})} />
+              <Select 
+                value={newMed.isCustomName ? 'Other' : newMed.name} 
+                onValueChange={(v) => {
+                  if (v === 'Other') setNewMed({...newMed, name: '', isCustomName: true});
+                  else setNewMed({...newMed, name: v, isCustomName: false});
+                }}
+              >
+                <SelectTrigger className="w-full h-10 bg-slate-50 border-slate-200 rounded-lg focus-visible:ring-[#606C38]">
+                  <SelectValue placeholder="Select DOH TB Drug..." />
+                </SelectTrigger>
+                <SelectContent className="rounded-lg shadow-xl">
+                  <SelectGroup>
+                    {STANDARD_TB_DRUGS.map((drug) => (
+                      <SelectItem key={drug} value={drug} className="font-medium">{drug}</SelectItem>
+                    ))}
+                    <SelectItem value="Other" className="font-medium text-[#606C38]">Custom / Other...</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              {newMed.isCustomName && (
+                <Input 
+                  placeholder="Type custom medication name" 
+                  className="mt-2 h-10 text-sm bg-white border-slate-300 rounded-lg focus-visible:ring-[#606C38]" 
+                  value={newMed.name} 
+                  onChange={(e) => setNewMed({...newMed, name: e.target.value})} 
+                  autoFocus
+                />
+              )}
             </div>
             <div className="col-span-1">
               <Label className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1 block">{t("dosage")}</Label>
@@ -1038,7 +1169,8 @@ export default function PatientDetail() {
 
       <div className="space-y-6 animate-fade-in pb-10 print:hidden">
         
-        <div className="flex items-center justify-between">
+        {/* --- STICKY ACTION HEADER --- */}
+        <div className="sticky top-0 z-40 bg-white/90 backdrop-blur-md py-4 border-b border-slate-200 mb-6 flex items-center justify-between shadow-sm px-4 -mx-4">
           <Button variant="ghost" onClick={() => navigate(-1)} className="gap-2 text-[#606C38] hover:bg-[#FEFAE0] rounded-xl px-4">
             <ArrowLeft className="h-4 w-4" /> {t("backBtn")}
           </Button>
@@ -1083,6 +1215,12 @@ export default function PatientDetail() {
                     {patient?.risk_level && (
                       <Badge variant="outline" className={`font-extrabold px-3 py-1 uppercase text-xs tracking-wider border ${getRiskColor(patient.risk_level)}`}>
                         {patient.risk_level} 
+                      </Badge>
+                    )}
+                    {/* --- SPUTUM CONVERSION BADGE --- */}
+                    {isSputumConverted && (
+                      <Badge className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold tracking-wide uppercase px-2 py-1 border-none shadow-sm">
+                        <CheckCircle2 className="w-3 h-3 mr-1" /> Sputum Converted
                       </Badge>
                     )}
                   </div>
@@ -1150,30 +1288,9 @@ export default function PatientDetail() {
         {/* --- TAB CONTENT: OVERVIEW --- */}
         {activeTab === 'overview' && (
           <div className="grid gap-6 lg:grid-cols-3 animate-fade-in">
+            
+            {/* Left Column - Doctor Notes */}
             <div className="space-y-6 lg:col-span-1">
-              <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
-                <CardHeader className="pb-3 border-b border-slate-100">
-                  <CardTitle className="flex items-center justify-between text-md text-[#283618] font-bold">
-                    <div className="flex items-center gap-2">
-                      <Scale className="h-5 w-5 text-[#606C38]" /> {t("patientVitals")}
-                    </div>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-1">{t("weight")}</p>
-                      <p className="text-3xl font-extrabold text-black">{currentWeight || "--"} <span className="text-sm text-slate-500 font-medium">kg</span></p>
-                    </div>
-                    {!isCured && (
-                      <Button onClick={() => setWeightModalOpen(true)} size="sm" variant="outline" className="border-[#606C38] text-[#606C38] hover:bg-[#FEFAE0] rounded-lg">
-                        <Edit className="h-4 w-4 mr-1" /> Update
-                      </Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
               <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
                 <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between space-y-0">
                   <CardTitle className="flex items-center gap-2 text-md text-[#283618] font-bold">
@@ -1191,69 +1308,148 @@ export default function PatientDetail() {
                       <p className="text-sm text-slate-500 italic">{t("noConcerns")}</p>
                     </div>
                   ) : (
-                    <div className="space-y-3">
-                      {notes.filter(n => !n.is_checked && n.category !== 'Instruction').map(note => (
-                        <div key={note.id} className="p-4 border border-[#DDE5B6] rounded-xl bg-[#FEFAE0]/40">
-                          <div className="flex justify-between items-start mb-2">
-                            <Badge variant="outline" className="text-[10px] bg-white text-[#606C38] border-[#DDE5B6]">{note.category}</Badge>
-                            <Button size="icon" variant="ghost" className="h-6 w-6 text-slate-400 hover:text-[#606C38] hover:bg-white rounded-full" onClick={() => handleCompleteAuditLogOnly(note.id)}>
-                              <Check className="h-4 w-4" />
-                            </Button>
+                    <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                      {notes.filter(n => !n.is_checked && n.category !== 'Instruction').map(note => {
+                        const isAlert = checkSmartAlert(note.note_text);
+                        return (
+                          <div key={note.id} className={`p-4 border rounded-xl ${isAlert ? 'border-red-300 bg-red-50' : 'border-[#DDE5B6] bg-[#FEFAE0]/40'}`}>
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="flex flex-wrap gap-2 items-center">
+                                <Badge variant="outline" className={`text-[10px] bg-white ${isAlert ? 'text-red-700 border-red-200' : 'text-[#606C38] border-[#DDE5B6]'}`}>{note.category}</Badge>
+                                {isAlert && (
+                                  <Badge className="bg-red-500 hover:bg-red-600 text-white text-[10px] border-none shadow-sm flex items-center">
+                                    <AlertCircle className="w-3 h-3 mr-1" /> Action Required
+                                  </Badge>
+                                )}
+                              </div>
+                              <Button size="icon" variant="ghost" className="h-6 w-6 text-slate-400 hover:text-[#606C38] hover:bg-white rounded-full" onClick={() => handleCompleteAuditLogOnly(note.id)}>
+                                <Check className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            <p className={`text-sm font-medium leading-relaxed ${isAlert ? 'text-red-900' : 'text-black'}`}>{note.note_text}</p>
+                            <p className="text-[11px] text-slate-500 mt-3 font-medium">{new Date(note.created_at).toLocaleDateString()}</p>
                           </div>
-                          <p className="text-sm font-medium text-black leading-relaxed">{note.note_text}</p>
-                          <p className="text-[11px] text-slate-500 mt-3 font-medium">{new Date(note.created_at).toLocaleDateString()}</p>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>
               </Card>
             </div>
 
+            {/* Right Column - Dedicated Weight Tracker with Chart */}
             <div className="space-y-6 lg:col-span-2">
-              {startDate && endDate ? (
-                <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
-                  <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between space-y-0">
-                    <CardTitle className="flex items-center gap-2 text-md text-[#283618] font-bold">
-                      <TrendingUp className="h-5 w-5 text-[#606C38]" /> {t("milestoneProgress")}
-                    </CardTitle>
-                    {!isCured && (
-                      <Badge variant="secondary" className="bg-[#DDE5B6] text-[#283618] px-3 py-1 font-bold">
-                        {daysLeft} {t("daysRemaining")}
-                      </Badge>
-                    )}
-                  </CardHeader>
-                  <CardContent className="pt-6 space-y-6">
-                    <div>
-                      <div className="flex justify-between text-xs mb-2 font-bold uppercase text-slate-500">
-                        <span>{t("progressLabel")}</span>
-                        <span className="text-black">{Math.round(timeProgress)}%</span>
-                      </div>
-                      <Progress value={timeProgress} className={`h-2.5 bg-slate-200 rounded-full [&>div]:${isCured ? 'bg-emerald-500' : 'bg-[#606C38]'}`} />
+              <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
+                <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between space-y-0 bg-[#F4F7F4]/50 rounded-t-2xl">
+                  <CardTitle className="flex items-center gap-2 text-md text-[#283618] font-bold">
+                    <Scale className="h-5 w-5 text-[#606C38]" /> {t("patientVitals")} (Weight Tracker)
+                  </CardTitle>
+                  {!isCured && (
+                    <Button size="sm" onClick={() => setWeightModalOpen(true)} className="bg-[#606C38] hover:bg-[#283618] text-white rounded-lg h-8 px-3">
+                      <Plus className="h-3 w-3 mr-1" /> {t("updateWeight")}
+                    </Button>
+                  )}
+                </CardHeader>
+                <CardContent className="pt-6 flex flex-col space-y-6">
+                  
+                  <div className="flex flex-col md:flex-row gap-6">
+                    {/* Current Weight Block */}
+                    <div className="md:w-1/3 flex flex-col justify-center items-center bg-slate-50 p-6 rounded-2xl border border-slate-100 text-center">
+                      <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">Most Recent Weight</p>
+                      <p className="text-5xl font-extrabold text-[#283618]">{currentWeight || "--"} <span className="text-xl text-slate-500 font-bold">kg</span></p>
                     </div>
-                    <div>
-                      <div className="flex justify-between text-xs mb-2 font-bold uppercase text-slate-500">
-                        <span>{t("adherenceLabel")}</span>
-                        <span className={aggregatedAdherenceRate < 85 ? "text-red-600 font-extrabold" : (isCured ? "text-emerald-600" : "text-[#606C38]")}>{Math.round(aggregatedAdherenceRate)}%</span>
-                      </div>
-                      <Progress value={aggregatedAdherenceRate} className={`h-2.5 rounded-full ${aggregatedAdherenceRate < 85 ? "bg-slate-200 [&>div]:bg-red-500" : `bg-slate-200 [&>div]:${isCured ? 'bg-emerald-500' : 'bg-[#606C38]'}`}`} />
-                      {aggregatedAdherenceRate < 85 && (
-                        <p className="text-[11px] text-red-500 font-semibold mt-1.5 flex items-center gap-1">
-                          <AlertCircle className="h-3 w-3" /> Warning: Patient compliance has fallen below the 85% DOH target threshold.
-                        </p>
+
+                    {/* --- WEIGHT TREND CHART --- */}
+                    <div className="md:w-2/3 h-[180px] w-full border border-slate-100 rounded-2xl p-4 bg-white shadow-sm">
+                      {vitalsHistory.length < 2 ? (
+                         <div className="h-full flex items-center justify-center text-sm text-slate-400 italic">
+                            Log at least 2 weight records to view trend chart.
+                         </div>
+                      ) : (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={weightChartData} margin={{ top: 5, right: 5, bottom: 5, left: -20 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                            <XAxis dataKey="date" tick={{fontSize: 10, fill: '#64748b'}} tickLine={false} axisLine={false} />
+                            <YAxis tick={{fontSize: 10, fill: '#64748b'}} tickLine={false} axisLine={false} domain={['dataMin - 2', 'dataMax + 2']} />
+                            <Tooltip 
+                              contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                              itemStyle={{ color: '#283618', fontWeight: 'bold' }}
+                            />
+                            <Line type="monotone" dataKey="weight" stroke="#606C38" strokeWidth={3} dot={{r: 4, fill: '#606C38', strokeWidth: 2, stroke: '#fff'}} activeDot={{r: 6}} />
+                          </LineChart>
+                        </ResponsiveContainer>
                       )}
                     </div>
-                  </CardContent>
-                </Card>
-              ) : (
-                <Card className="rounded-2xl shadow-sm border border-slate-200 bg-slate-50 flex items-center justify-center h-full min-h-[200px]">
-                  <div className="text-center">
-                    <Activity className="h-10 w-10 text-slate-300 mx-auto mb-3" />
-                    <p className="text-slate-500 font-medium">Roadmap not configured yet.</p>
-                    <p className="text-xs text-slate-400 mt-1">Configure in the Roadmap & Protocols tab.</p>
                   </div>
-                </Card>
-              )}
+
+                  {/* Vitals History Editable Table */}
+                  <div className="flex-1 border-t border-slate-100 pt-4">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Historical Logs</p>
+                    {vitalsHistory.length === 0 ? (
+                      <div className="py-10 text-center bg-slate-50 rounded-xl border border-slate-100">
+                        <p className="text-sm text-slate-500 italic">No weight records found for this patient.</p>
+                      </div>
+                    ) : (
+                      <div className="max-h-[250px] overflow-y-auto border border-slate-200 rounded-xl">
+                        <Table>
+                          <TableHeader className="bg-slate-50 sticky top-0 z-10 shadow-sm border-b border-slate-200">
+                            <TableRow className="hover:bg-transparent">
+                              <TableHead className="text-xs font-bold text-slate-700 h-10 px-5">Date Recorded</TableHead>
+                              <TableHead className="text-xs font-bold text-slate-700 h-10 px-5 text-right w-[150px]">Weight (kg)</TableHead>
+                              {!isCured && <TableHead className="text-xs font-bold text-slate-700 h-10 px-5 text-right w-[120px]">Actions</TableHead>}
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {vitalsHistory.map((vital, idx) => (
+                              <TableRow key={vital.id || idx} className="hover:bg-slate-50/50 border-b border-slate-100 transition-colors">
+                                <TableCell className="text-sm font-semibold text-slate-700 py-3.5 px-5">
+                                  {new Date(vital.recorded_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                                </TableCell>
+                                <TableCell className="text-sm font-bold text-black text-right py-3.5 px-5">
+                                  {editingVitalId === vital.id ? (
+                                    <Input 
+                                      type="number" 
+                                      value={editingVitalWeight} 
+                                      onChange={(e) => setEditingVitalWeight(e.target.value)} 
+                                      className="w-24 ml-auto h-9 text-right font-bold focus-visible:ring-[#606C38]" 
+                                      autoFocus
+                                    />
+                                  ) : (
+                                    <span className="text-lg">{vital.weight_kg} <span className="text-xs text-slate-400 font-medium">kg</span></span>
+                                  )}
+                                </TableCell>
+                                {!isCured && (
+                                  <TableCell className="text-right py-3.5 px-5">
+                                    {editingVitalId === vital.id ? (
+                                      <div className="flex justify-end gap-1.5">
+                                        <Button size="icon" variant="ghost" onClick={() => handleUpdateVital(vital.id)} className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 bg-emerald-50/50">
+                                          <Check className="h-4 w-4"/>
+                                        </Button>
+                                        <Button size="icon" variant="ghost" onClick={() => setEditingVitalId(null)} className="h-8 w-8 text-slate-500 hover:bg-slate-100">
+                                          <X className="h-4 w-4"/>
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <div className="flex justify-end gap-1.5">
+                                        <Button size="icon" variant="ghost" onClick={() => { setEditingVitalId(vital.id); setEditingVitalWeight(vital.weight_kg.toString()); }} className="h-8 w-8 text-blue-500 hover:text-blue-600 hover:bg-blue-50">
+                                          <Edit className="h-4 w-4"/>
+                                        </Button>
+                                        <Button size="icon" variant="ghost" onClick={() => handleDeleteVital(vital.id)} className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50">
+                                          <Trash2 className="h-4 w-4"/>
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </TableCell>
+                                )}
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </div>
         )}
@@ -1274,43 +1470,78 @@ export default function PatientDetail() {
                     </Button>
                   )}
                 </CardHeader>
-                <CardContent className="flex-1 p-4 space-y-3 max-h-[500px] overflow-y-auto">
-                  {meds.length === 0 ? (
-                    <div className="py-10 text-center">
-                      <Pill className="h-8 w-8 text-slate-200 mx-auto mb-2" />
-                      <p className="text-sm text-slate-400 italic">{t("noPrescriptions")}</p>
+                <CardContent className="flex-1 p-4 max-h-[500px] overflow-y-auto">
+                  {/* --- ACTIVE MEDS --- */}
+                  <div className="mb-4">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Active & Upcoming</p>
+                    <div className="space-y-3">
+                      {activeMeds.length === 0 ? (
+                        <div className="py-4 text-center border border-dashed border-slate-200 rounded-xl">
+                          <p className="text-sm text-slate-400 italic">No active prescriptions.</p>
+                        </div>
+                      ) : activeMeds.map((med) => (
+                        <div key={med.id} className="flex justify-between items-center p-4 rounded-xl border border-[#DDE5B6] bg-white shadow-sm">
+                          <div>
+                            <p className="text-sm font-bold text-black mb-1">{med.name} <span className="font-medium text-slate-500">({med.dosage})</span></p>
+                            <p className="text-[11px] font-medium text-slate-400">{new Date(med.start_date).toLocaleDateString()} - {new Date(med.end_date).toLocaleDateString()} • {med.time}</p>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {!isCured && (
+                              <>
+                                <Button size="icon" variant="ghost" className="h-8 w-8 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-full" onClick={() => handleEditClick(med)}>
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full" onClick={() => handleDeletePrescription(med.id)}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ) : meds.map((med) => (
-                    <div key={med.id} className={`flex justify-between items-center p-4 rounded-xl border shadow-sm ${isCured ? 'bg-slate-50 border-slate-100' : 'bg-white border-slate-200'}`}>
-                      <div>
-                        <p className="text-sm font-bold text-black mb-1">{med.name} <span className="font-medium text-slate-500">({med.dosage})</span></p>
-                        <p className="text-[11px] font-medium text-slate-400">{new Date(med.start_date).toLocaleDateString()} - {new Date(med.end_date).toLocaleDateString()} • {med.time}</p>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        {!isCured && (
-                          <>
-                            <Button size="icon" variant="ghost" className="h-8 w-8 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-full" onClick={() => handleEditClick(med)}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full" onClick={() => handleDeletePrescription(med.id)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </>
-                        )}
+                  </div>
+
+                  {/* --- COMPLETED MEDS --- */}
+                  {pastMeds.length > 0 && (
+                    <div className="mt-6 pt-4 border-t border-slate-100">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Completed / Past</p>
+                      <div className="space-y-3">
+                        {pastMeds.map((med) => (
+                          <div key={med.id} className="flex justify-between items-center p-3 rounded-xl border border-slate-100 bg-slate-50 opacity-70">
+                            <div>
+                              <p className="text-sm font-bold text-slate-600 mb-1">{med.name} <span className="font-medium text-slate-400">({med.dosage})</span></p>
+                              <p className="text-[11px] font-medium text-slate-400">{new Date(med.start_date).toLocaleDateString()} - {new Date(med.end_date).toLocaleDateString()}</p>
+                            </div>
+                            {!isCured && (
+                               <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full" onClick={() => handleDeletePrescription(med.id)}>
+                                 <Trash2 className="h-4 w-4" />
+                               </Button>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  ))}
+                  )}
                 </CardContent>
               </Card>
             </div>
             
             <div className="space-y-6 lg:col-span-2">
-              {/* --- NEW: DOH FORM 4 CLASSIFICATION CARD --- */}
               <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
                 <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between space-y-0 bg-[#F4F7F4]/50 rounded-t-2xl">
-                  <CardTitle className="text-md font-bold flex items-center gap-2 text-[#283618]">
-                    <ClipboardList className="h-5 w-5 text-[#606C38]" /> DOH TB Form 4 Classifications
-                  </CardTitle>
+                  <div className="flex justify-between items-center w-full">
+                    <CardTitle className="text-md font-bold flex items-center gap-2 text-[#283618]">
+                      <ClipboardList className="h-5 w-5 text-[#606C38]" /> DOH TB Form 4 Classifications
+                    </CardTitle>
+                    {/* --- LAST SYNCED INDICATOR --- */}
+                    {dohLastSynced && (
+                      <div className="hidden sm:flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Last Synced: {new Date(dohLastSynced.created_at).toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'})}
+                      </div>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent className="pt-5 space-y-5">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
