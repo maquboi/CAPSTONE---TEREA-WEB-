@@ -727,15 +727,15 @@ export default function PatientDetail() {
     setPrescribing(true);
     try {
       if (editingMedId) {
+        // --- SMART EDIT (ANTI-OVERRIDE) ---
+        // 1. Archive the old medication so past logs remain accurate
+        const todayStr = new Date().toISOString().split('T')[0];
         await supabase.from('medications').update({
-          name: newMed.name,
-          dosage: newMed.dosage,
-          time: formattedTime,
-          start_date: newMed.start,
-          end_date: newMed.end,
+          end_date: todayStr, // Close out the old prescription today
+          is_archived: true
         }).eq('id', editingMedId);
-        triggerAlert(t("success"), t("prescriptionUpdated"), "success");
-      } else {
+
+        // 2. Insert the modified medication as a brand new entry
         await supabase.from('medications').insert({
           user_id: id,
           name: newMed.name,
@@ -743,7 +743,22 @@ export default function PatientDetail() {
           time: formattedTime,
           start_date: newMed.start,
           end_date: newMed.end,
-          is_taken: false
+          is_taken: false,
+          is_archived: false
+        });
+
+        triggerAlert(t("success"), "Prescription updated safely (historical logs preserved).", "success");
+      } else {
+        // --- NORMAL INSERT ---
+        await supabase.from('medications').insert({
+          user_id: id,
+          name: newMed.name,
+          dosage: newMed.dosage,
+          time: formattedTime,
+          start_date: newMed.start,
+          end_date: newMed.end,
+          is_taken: false,
+          is_archived: false
         });
         triggerAlert(t("success"), t("prescriptionAdded"), "success");
       }
@@ -1745,11 +1760,11 @@ export default function PatientDetail() {
                     </span>
                   </CardHeader>
                   <CardContent className="pt-4">
-                    {activeMedsToday.length === 0 ? (
+                    {activeMeds.length === 0 ? (
                       <p className="text-sm text-slate-500 italic text-center py-4">No medications scheduled for today.</p>
                     ) : (
                       <div className="space-y-3">
-                        {activeMedsToday.map(med => {
+                        {activeMeds.map(med => {
                           const log = todayLogs.find(l => l.medication_id.toString() === med.id.toString());
                           return (
                             <div key={med.id} className="flex justify-between items-center p-3 border border-slate-100 rounded-xl bg-slate-50">

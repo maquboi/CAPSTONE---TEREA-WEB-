@@ -15,10 +15,10 @@ import {
   Check,
   CheckCircle,
   AlertCircle,
-  QrCode // Added QrCode icon
+  QrCode
 } from "lucide-react";
 import { useLanguage } from "../admin/LanguageContext";
-import { QRCodeSVG } from "qrcode.react"; // Imported QRCode generator
+import { QRCodeSVG } from "qrcode.react"; 
 
 const translations = {
   en: {
@@ -75,7 +75,7 @@ export default function DoctorDashboard() {
   const [recentActivities, setRecentActivities] = useState<any[]>([]); 
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false); 
-  const [showQR, setShowQR] = useState(false); // State for QR Code modal
+  const [showQR, setShowQR] = useState(false); 
 
   const updateStats = async (userId: string) => {
     try {
@@ -157,18 +157,43 @@ export default function DoctorDashboard() {
 
       await Promise.all([updateStats(user.id), fetchRecentActivities(user.id)]);
 
+      // SUPERCHARGED REALTIME LISTENER
       channel = supabase
-        .channel('dashboard-realtime')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'connections' }, () => updateStats(user.id))
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activity_logs' }, () => fetchRecentActivities(user.id))
+        .channel(`dashboard-sync-${user.id}`)
+        .on(
+          'postgres_changes', 
+          { event: '*', schema: 'public', table: 'connections', filter: `doctor_id=eq.${user.id}` }, 
+          () => {
+            updateStats(user.id);
+            fetchRecentActivities(user.id); 
+          }
+        )
+        .on(
+          'postgres_changes', 
+          { event: 'INSERT', schema: 'public', table: 'activity_logs', filter: `doctor_id=eq.${user.id}` }, 
+          () => fetchRecentActivities(user.id)
+        )
         .subscribe();
       
       setLoading(false);
     };
 
     initDashboard();
-    return () => { if (channel) supabase.removeChannel(channel); };
-  }, []);
+
+    // Fallback global event listener in case child components dispatch local updates before DB sync
+    const handleLocalUpdate = () => {
+      if (doctorData.id) {
+        updateStats(doctorData.id);
+        fetchRecentActivities(doctorData.id);
+      }
+    };
+    window.addEventListener('connectionUpdated', handleLocalUpdate);
+
+    return () => { 
+      if (channel) supabase.removeChannel(channel); 
+      window.removeEventListener('connectionUpdated', handleLocalUpdate);
+    };
+  }, [doctorData.id]);
 
   const handleCopyCode = async () => {
     const textToCopy = doctorData.clinicCode;
@@ -216,7 +241,7 @@ export default function DoctorDashboard() {
         </DialogPortal>
       </Dialog>
 
-      {/* NEW: QR Code Modal */}
+      {/* QR Code Modal */}
       <Dialog open={showQR} onOpenChange={setShowQR}>
         <DialogPortal>
           <DialogOverlay className="bg-black/40 backdrop-blur-sm" />
