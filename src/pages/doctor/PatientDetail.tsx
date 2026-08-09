@@ -62,6 +62,9 @@ import {
 } from "@/components/ui/select";
 import { useLanguage } from "../admin/LanguageContext";
 
+// IMPORT YOUR NEW NOTIFICATION DISPATCHER
+import { sendNotificationToPatient } from "@/lib/notifications";
+
 const translations: Record<string, Record<string, string>> = {
   en: {
     backBtn: "Back to Patient List",
@@ -655,6 +658,7 @@ export default function PatientDetail() {
     if (!memoText.trim()) return;
     setPostingMemo(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
       const { error } = await supabase.from('doctor_notes').insert({
         user_id: id,
         note_text: memoText,
@@ -662,6 +666,15 @@ export default function PatientDetail() {
         is_checked: false
       });
       if (error) throw error;
+      
+      // DISPATCH PUSH NOTIFICATION
+      await sendNotificationToPatient({
+        patientId: id as string,
+        doctorId: user?.id,
+        title: "New Protocol Memo",
+        message: "Your doctor has posted a new instruction to your diary.",
+      });
+
       triggerAlert(t("memoSent"), t("memoSentDesc"), "success");
       setMemoText("");
       setMemoModalOpen(false);
@@ -701,6 +714,15 @@ export default function PatientDetail() {
       }
 
       await supabase.from('roadmap').insert(protocolMilestones);
+      
+      // DISPATCH PUSH NOTIFICATION
+      await sendNotificationToPatient({
+        patientId: id as string,
+        doctorId: user?.id,
+        title: "Treatment Plan Updated",
+        message: "A new DOH TB protocol has been generated for your treatment plan.",
+      });
+
       triggerAlert(t("success"), t("protocolGenerated"), "success");
       fetchData();
     } catch (err: any) {
@@ -726,6 +748,8 @@ export default function PatientDetail() {
 
     setPrescribing(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+
       if (editingMedId) {
         // --- SMART EDIT (ANTI-OVERRIDE) ---
         // 1. Archive the old medication so past logs remain accurate
@@ -762,6 +786,14 @@ export default function PatientDetail() {
         });
         triggerAlert(t("success"), t("prescriptionAdded"), "success");
       }
+
+      // DISPATCH PUSH NOTIFICATION
+      await sendNotificationToPatient({
+        patientId: id as string,
+        doctorId: user?.id,
+        title: "Medication Schedule Updated",
+        message: "Your doctor has updated your daily medication schedule and logs.",
+      });
       
       setNewMed({ name: "", dosage: "", time: "08:00", start: "", end: "", isCustomName: false });
       setEditingMedId(null);
@@ -858,6 +890,14 @@ export default function PatientDetail() {
       ]);
 
       createAuditLog("Patient Discharged", "Treatment Lifecycle", patient.full_name, { action: `Marked ${selectedDischargeType} & Scheduled Follow-ups` });
+
+      // DISPATCH PUSH NOTIFICATION
+      await sendNotificationToPatient({
+        patientId: id as string,
+        doctorId: user?.id,
+        title: "Treatment Completed! 🏆",
+        message: "Congratulations! You have been officially discharged and marked as Cured.",
+      });
 
       setConfirmSafetyModalOpen(false);
       setDischargeModalOpen(false);
@@ -1378,7 +1418,7 @@ export default function PatientDetail() {
                     <div className="md:w-2/3 h-[180px] w-full border border-slate-100 rounded-2xl p-4 bg-white shadow-sm">
                       {vitalsHistory.length < 2 ? (
                          <div className="h-full flex items-center justify-center text-sm text-slate-400 italic">
-                            Log at least 2 weight records to view trend chart.
+                           Log at least 2 weight records to view trend chart.
                          </div>
                       ) : (
                         <ResponsiveContainer width="100%" height="100%">

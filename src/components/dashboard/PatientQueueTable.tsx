@@ -26,6 +26,9 @@ import {
   Loader2
 } from "lucide-react";
 
+// <-- ADDED IMPORT FOR THE NOTIFICATION HELPER -->
+import { sendNotificationToPatient } from "@/lib/notifications";
+
 export function PatientQueueTable({ search = "", riskFilter = "all", statusFilter = "all" }) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'pending' | 'active'>('pending');
@@ -122,6 +125,14 @@ export function PatientQueueTable({ search = "", riskFilter = "all", statusFilte
         .eq('doctor_id', user?.id)
         .eq('patient_id', patientId);
       
+      // <-- DISPATCH PUSH NOTIFICATION -->
+      await sendNotificationToPatient({
+        patientId,
+        doctorId: user?.id,
+        title: "Request Approved! 🎉",
+        message: "Your doctor has approved your connection request. You can now view your treatment roadmap.",
+      });
+
       triggerAlert("Request Approved", `${patientName} has been successfully added to your active roster.`, "success");
       fetchPatients();
       window.dispatchEvent(new Event('connectionUpdated')); // Notify Dashboard to update counts
@@ -142,7 +153,15 @@ export function PatientQueueTable({ search = "", riskFilter = "all", statusFilte
         .delete()
         .eq('doctor_id', user?.id)
         .eq('patient_id', patientId);
-       
+        
+      // <-- DISPATCH PUSH NOTIFICATION -->
+      await sendNotificationToPatient({
+        patientId,
+        doctorId: user?.id,
+        title: "Connection Request Updated",
+        message: "Your doctor connection request was declined.",
+      });
+
       triggerAlert("Request Declined", `The connection request from ${patientName} was declined.`, "error");
       fetchPatients();
       window.dispatchEvent(new Event('connectionUpdated')); // Notify Dashboard to update counts
