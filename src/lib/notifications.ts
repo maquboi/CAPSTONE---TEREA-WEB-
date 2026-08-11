@@ -1,7 +1,7 @@
 import { supabase } from "./supabase";
 
 const ONESIGNAL_APP_ID = "d6a0d4c7-af80-4323-b9e4-dcdc447d7cde";
-const ONESIGNAL_REST_API_KEY = "os_v2_app_22qnjr5pqbbshope3toei7l43zaxvs6kdznenev3xxeilzwzcg6vz3igz63vs3iysehb5hnvirfdxxn2aiwnq4jjdaitox3yb3pxnha";
+const ONESIGNAL_REST_API_KEY = import.meta.env.VITE_ONESIGNAL_REST_API_KEY;
 
 interface NotificationPayload {
   patientId: string;
