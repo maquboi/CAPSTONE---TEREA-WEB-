@@ -60,4 +60,4 @@ export async function sendNotificationToPatient({
   } catch (err) {
     console.error("Error dispatching notification:", err);
   }
-}
+} 

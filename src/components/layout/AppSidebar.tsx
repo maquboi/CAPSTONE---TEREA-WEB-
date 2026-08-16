@@ -13,6 +13,7 @@ import {
   UserCircle,
   Headset,
   HelpCircle,
+  MapPin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -38,6 +39,7 @@ const adminNavSections: NavSection[] = [
     title: "Management",
     items: [
       { title: "User Management", href: "/admin/users", icon: Users },
+      { title: "Facility Management", href: "/admin/facilities", icon: MapPin },
       { title: "FAQ Management", href: "/admin/faq", icon: HelpCircle },
     ],
   },
