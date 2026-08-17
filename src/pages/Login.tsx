@@ -147,7 +147,8 @@ export default function Login() {
 
         <div className="relative z-10 flex w-full flex-col justify-between p-11 xl:p-14">
           <div className="space-y-8">
-            <div>
+            <div className="flex flex-col items-start">
+              <img src="/LogoNoBG.png" alt="TEREA Logo" className="h-12 w-12 mb-3 object-contain drop-shadow-md" />
               <h1 className="text-2xl font-bold tracking-tight text-white">TEREA</h1>
               <p className="text-xs font-semibold tracking-[0.14em] text-[#DDE5B6]">TB RISK ASSESSMENT PLATFORM</p>
             </div>
@@ -196,7 +197,8 @@ export default function Login() {
             </button>
           </div>
 
-          <div className="lg:hidden text-center">
+          <div className="lg:hidden flex flex-col items-center text-center">
+            <img src="/LogoNoBG.png" alt="TEREA Logo" className="h-12 w-12 mb-2 object-contain drop-shadow-sm" />
             <h1 className="text-2xl font-bold tracking-tight text-[#2D3B1E]">TEREA</h1>
             <p className="text-xs font-semibold tracking-wider text-[#606C38]">RISK ASSESSMENT</p>
           </div>

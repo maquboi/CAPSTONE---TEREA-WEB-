@@ -8,7 +8,10 @@ import {
   ArrowRight,
   Users,
   BellRing,
-  Activity
+  Activity,
+  Download,
+  Smartphone,
+  Lock
 } from "lucide-react";
 
 const features = [
@@ -24,8 +27,8 @@ const features = [
   },
   {
     icon: ShieldCheck,
-    title: "TB-DOTS Standardized",
-    description: "Built to align with DOH protocols, ensuring your clinic maintains high standards of documentation and care.",
+    title: "TB-DOTS Guided Workflow",
+    description: "Designed following the general principles of the DOH National TB Control Program to support local clinic documentation.",
   },
 ];
 
@@ -82,16 +85,30 @@ export default function LandingPage() {
       {/* Nav */}
       <header className="sticky top-0 z-50 border-b border-[#606C38]/15 bg-white/90 backdrop-blur-xl shadow-[0_8px_30px_rgba(45,59,30,0.06)]">
         <div className="flex h-16 w-full items-center justify-between px-6 sm:px-10">
-          <div className="flex items-center">
+          <div className="flex items-center gap-2.5">
+            <img src="/LogoNoBG.png" alt="TEREA Logo" className="h-8 w-8 object-contain drop-shadow-sm" />
             <span className="text-xl font-extrabold tracking-tight text-[#2D3B1E]">TEREA</span>
           </div>
           
-          <Button 
-            className="btn-premium border-2 border-[#606C38]/30 bg-[#DDE5B6]/30 text-[#2D3B1E] hover:bg-[#606C38] hover:text-white hover:border-[#606C38] rounded-xl font-semibold"
-            onClick={() => navigate("/login")}
-          >
-            Staff Login
-          </Button>
+          <div className="flex items-center gap-5">
+            <button 
+              onClick={() => navigate("/login")}
+              className="group flex items-center gap-1.5 text-sm font-semibold text-[#2D3B1E]/60 hover:text-[#606C38] transition-colors"
+              title="Secure Staff Portal"
+            >
+              <Lock className="h-4 w-4 transition-transform group-hover:scale-110" />
+              <span className="hidden sm:inline">Staff Portal</span>
+            </button>
+
+            <a 
+              href="/app-release.apk" 
+              download
+              className="btn-premium hidden sm:flex items-center gap-2 text-sm font-bold text-white bg-[#606C38] hover:bg-[#4A5529] px-5 py-2.5 rounded-xl shadow-sm transition-all"
+            >
+              <Smartphone className="h-4 w-4" />
+              Download for Android
+            </a>
+          </div>
         </div>
       </header>
 
@@ -116,6 +133,23 @@ export default function LandingPage() {
               <p className="landing-text-fade max-w-xl text-base font-medium leading-relaxed tracking-[0.01em] text-[#2D3B1E]/80 md:text-lg" style={{ animationDelay: "260ms" }}>
                 TEREA empowers healthcare providers in Carmona with a dashboard to monitor patient compliance, triage risks, and streamline clinical workflows in real-time.
               </p>
+              
+              {/* Mobile Only Download Button (Shows only on small screens) */}
+              <div className="sm:hidden pt-2 pb-1" style={{ animationDelay: "290ms" }}>
+                <a 
+                  href="/app-release.apk" 
+                  download
+                  className="flex items-center justify-center gap-2 w-full text-base font-bold text-white bg-[#606C38] hover:bg-[#2D3B1E] px-5 py-3.5 rounded-xl shadow-md transition-colors"
+                >
+                  <Smartphone className="h-5 w-5" />
+                  Download App for Android
+                  <Download className="h-4 w-4 ml-1" />
+                </a>
+                <p className="text-center text-[10px] text-slate-500 mt-2 font-medium italic">
+                  *Available exclusively for Android devices (.apk)
+                </p>
+              </div>
+
               <div className="landing-reveal-up flex flex-wrap items-center gap-5 text-sm font-semibold text-[#2D3B1E]/90" style={{ animationDelay: "320ms" }}>
                 <span className="flex items-center gap-1.5"><Users className="h-4 w-4 text-[#606C38]" /> Patient Tracking</span>
                 <span className="h-1 w-1 rounded-full bg-[#606C38]/60" />
@@ -123,7 +157,7 @@ export default function LandingPage() {
               </div>
               <div className="landing-reveal-up flex items-center gap-2 pt-4 text-xs font-semibold text-[#2D3B1E]/60" style={{ animationDelay: "380ms" }}>
                 <ShieldCheck className="h-4 w-4 text-green-600" />
-                <span>Compliant with the PH Data Privacy Act of 2012</span>
+                <span>Designed with PH Data Privacy principles in mind</span>
               </div>
             </div>
 
@@ -278,12 +312,23 @@ export default function LandingPage() {
             </div>
           </div>
         
-          <Button 
-            className="btn-premium group h-10 rounded-xl border border-slate-200 bg-white shadow-sm px-5 font-bold text-[#2D3B1E] hover:bg-[#606C38] hover:text-white hover:border-[#606C38]"
-            onClick={() => navigate("/login")}
-          >
-            Staff Portal <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
-          </Button>
+          <div className="flex items-center gap-4">
+            <a 
+              href="/app-release.apk" 
+              download
+              className="hidden sm:flex items-center gap-2 text-sm font-semibold text-[#606C38] hover:text-[#2D3B1E] transition-colors"
+            >
+              <Download className="h-4 w-4" />
+              Get Android App
+            </a>
+            
+            <Button 
+              className="btn-premium group h-10 rounded-xl border border-slate-200 bg-white shadow-sm px-5 font-bold text-[#2D3B1E] hover:bg-[#606C38] hover:text-white hover:border-[#606C38]"
+              onClick={() => navigate("/login")}
+            >
+              Staff Portal <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
+            </Button>
+          </div>
         </div>
       </footer>
     </div>

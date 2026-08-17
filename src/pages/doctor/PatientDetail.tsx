@@ -46,7 +46,9 @@ import {
   Filter,
   Calendar,
   ClipboardList,
-  X
+  X,
+  ShieldAlert,
+  ArrowRightCircle
 } from "lucide-react";
 import { 
   LineChart, 
@@ -138,6 +140,7 @@ const translations: Record<string, Record<string, string>> = {
     early: "Early",
     late: "Late",
     cancelEdit: "Cancel",
+    purgeData: "Purge Record",
   },
   fil: {
     backBtn: "Bumalik sa Listahan ng Pasyente",
@@ -211,6 +214,7 @@ const translations: Record<string, Record<string, string>> = {
     early: "Maaga",
     late: "Huli",
     cancelEdit: "Kanselahin",
+    purgeData: "Burahin ang Rekord",
   }
 };
 
@@ -256,8 +260,10 @@ export default function PatientDetail() {
   const [weightModalOpen, setWeightModalOpen] = useState(false);
   const [memoModalOpen, setMemoModalOpen] = useState(false);
   const [prescriptionModalOpen, setPrescriptionModalOpen] = useState(false);
+  const [purgeModalOpen, setPurgeModalOpen] = useState(false);
 
   const [discharging, setDischarging] = useState(false);
+  const [isPurging, setIsPurging] = useState(false);
   const [generateCertificate, setGenerateCertificate] = useState(true);
   const [selectedDischargeType, setSelectedDischargeType] = useState<'cured' | 'treatment_completed' | null>(null);
 
@@ -286,7 +292,7 @@ export default function PatientDetail() {
   const [currentWeight, setCurrentWeight] = useState("");
   const [doctorName, setDoctorName] = useState("");
 
-  const [newMed, setNewMed] = useState({ name: "", dosage: "", time: "08:00", start: "", end: "", isCustomName: false });
+  const [newMed, setNewMed] = useState({ name: "", dosage: "", time: "08:00 AM", start: "", end: "", isCustomName: false });
   const [editingMedId, setEditingMedId] = useState<number | null>(null); 
   
   // Historical Log Engine
@@ -415,7 +421,6 @@ export default function PatientDetail() {
       if (profile?.registration_group) setRegistrationGroup(profile.registration_group);
       if (profile?.disease_anatomical_site) setAnatomicalSite(profile.disease_anatomical_site);
 
-      // Fetch DSSM Sputum Results from the dedicated dssm_monitoring table
       const { data: dssmLogs } = await supabase
         .from('dssm_monitoring')
         .select('milestone_month, result')
@@ -434,7 +439,6 @@ export default function PatientDetail() {
         setDssmResults(mappedResults);
       }
 
-      // Fetch Latest Audit Log for DOH Form
       const { data: auditData } = await supabase
         .from('audit_logs')
         .select('created_at, user_name')
@@ -445,7 +449,6 @@ export default function PatientDetail() {
         .maybeSingle();
       if (auditData) setDohLastSynced(auditData);
 
-      // Fetch Active (Non-Archived) Medications
       const { data: medications } = await supabase.from('medications').select('*').eq('user_id', id);
       setMeds((medications || []).filter(m => !m.is_archived));
 
@@ -463,7 +466,6 @@ export default function PatientDetail() {
         .order('created_at', { ascending: false });
       setNotes(patientNotes || []);
 
-      // Fetch Vitals History
       const { data: vitalsLogs } = await supabase
         .from('patient_vitals')
         .select('id, weight_kg, recorded_at')
@@ -569,7 +571,6 @@ export default function PatientDetail() {
   const handleSaveDohForm = async () => {
     setSavingDoh(true);
     try {
-      // 1. Update Profile Fields
       const { error: profileErr } = await supabase
         .from('profiles')
         .update({
@@ -580,7 +581,6 @@ export default function PatientDetail() {
 
       if (profileErr) throw profileErr;
 
-      // 2. Clear existing entries to prevent unique constraint conflicts, then insert new ones
       await supabase.from('dssm_monitoring').delete().eq('patient_id', id);
 
       const dssmEntries = Object.entries(dssmResults)
@@ -667,7 +667,6 @@ export default function PatientDetail() {
       });
       if (error) throw error;
       
-      // DISPATCH PUSH NOTIFICATION
       await sendNotificationToPatient({
         patientId: id as string,
         doctorId: user?.id,
@@ -699,31 +698,50 @@ export default function PatientDetail() {
       };
 
       let protocolMilestones = [];
+      let presetMeds = [];
 
       if (tbRegimen.includes("4-Month")) {
+        // BPaLM Protocol
         protocolMilestones = [
           { patient_id: id, doctor_id: user?.id, title: "End of Month 2 Sputum Test", location: "TB DOTS Clinic", appointment_date: addDays(start, 60), status: "pending", type: "protocol" },
           { patient_id: id, doctor_id: user?.id, title: "Final Month 4 Cure Assessment", location: "TB DOTS Clinic", appointment_date: addDays(start, 120), status: "pending", type: "protocol" }
         ];
+
+        presetMeds = [
+          { user_id: id, name: "Bedaquiline (B)", dosage: "400mg", time: "08:00 AM", start_date: start.toISOString().split('T')[0], end_date: addDays(start, 120), is_taken: false, is_archived: false },
+          { user_id: id, name: "Pretomanid (Pa)", dosage: "200mg", time: "08:00 AM", start_date: start.toISOString().split('T')[0], end_date: addDays(start, 120), is_taken: false, is_archived: false },
+          { user_id: id, name: "Linezolid (L)", dosage: "600mg", time: "08:00 AM", start_date: start.toISOString().split('T')[0], end_date: addDays(start, 120), is_taken: false, is_archived: false },
+          { user_id: id, name: "Moxifloxacin (M)", dosage: "400mg", time: "08:00 AM", start_date: start.toISOString().split('T')[0], end_date: addDays(start, 120), is_taken: false, is_archived: false }
+        ];
       } else {
+        // Standard 6-Month FDC Protocol
         protocolMilestones = [
           { patient_id: id, doctor_id: user?.id, title: "End of Intensive Phase Sputum Test", location: "TB DOTS Clinic", appointment_date: addDays(start, 60), status: "pending", type: "protocol" },
           { patient_id: id, doctor_id: user?.id, title: "Month 5 Sputum Follow-up", location: "TB DOTS Clinic", appointment_date: addDays(start, 150), status: "pending", type: "protocol" },
           { patient_id: id, doctor_id: user?.id, title: "Final Sputum & Cure Assessment", location: "TB DOTS Clinic", appointment_date: addDays(start, 180), status: "pending", type: "protocol" }
         ];
+
+        presetMeds = [
+          { user_id: id, name: "FDC (Rifampicin + Isoniazid + Pyrazinamide + Ethambutol)", dosage: "Intensive (Weight-based)", time: "08:00 AM", start_date: start.toISOString().split('T')[0], end_date: addDays(start, 60), is_taken: false, is_archived: false },
+          { user_id: id, name: "FDC (Rifampicin + Isoniazid)", dosage: "Continuation (Weight-based)", time: "08:00 AM", start_date: addDays(start, 61), end_date: addDays(start, 180), is_taken: false, is_archived: false }
+        ];
       }
 
       await supabase.from('roadmap').insert(protocolMilestones);
       
-      // DISPATCH PUSH NOTIFICATION
+      // Auto-populate prescriptions if empty to save the doctor time
+      if (meds.length === 0) {
+        await supabase.from('medications').insert(presetMeds);
+      }
+      
       await sendNotificationToPatient({
         patientId: id as string,
         doctorId: user?.id,
-        title: "Treatment Plan Updated",
-        message: "A new DOH TB protocol has been generated for your treatment plan.",
+        title: "Treatment Plan & Meds Updated",
+        message: "A new DOH TB protocol and baseline prescriptions have been generated for your treatment plan.",
       });
 
-      triggerAlert(t("success"), t("protocolGenerated"), "success");
+      triggerAlert(t("success"), "Protocol milestones and baseline medications have been generated successfully.", "success");
       fetchData();
     } catch (err: any) {
       triggerAlert(t("error"), err.message, "error");
@@ -751,15 +769,12 @@ export default function PatientDetail() {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (editingMedId) {
-        // --- SMART EDIT (ANTI-OVERRIDE) ---
-        // 1. Archive the old medication so past logs remain accurate
         const todayStr = new Date().toISOString().split('T')[0];
         await supabase.from('medications').update({
-          end_date: todayStr, // Close out the old prescription today
+          end_date: todayStr, 
           is_archived: true
         }).eq('id', editingMedId);
 
-        // 2. Insert the modified medication as a brand new entry
         await supabase.from('medications').insert({
           user_id: id,
           name: newMed.name,
@@ -773,7 +788,6 @@ export default function PatientDetail() {
 
         triggerAlert(t("success"), "Prescription updated safely (historical logs preserved).", "success");
       } else {
-        // --- NORMAL INSERT ---
         await supabase.from('medications').insert({
           user_id: id,
           name: newMed.name,
@@ -787,7 +801,6 @@ export default function PatientDetail() {
         triggerAlert(t("success"), t("prescriptionAdded"), "success");
       }
 
-      // DISPATCH PUSH NOTIFICATION
       await sendNotificationToPatient({
         patientId: id as string,
         doctorId: user?.id,
@@ -795,7 +808,7 @@ export default function PatientDetail() {
         message: "Your doctor has updated your daily medication schedule and logs.",
       });
       
-      setNewMed({ name: "", dosage: "", time: "08:00", start: "", end: "", isCustomName: false });
+      setNewMed({ name: "", dosage: "", time: "08:00 AM", start: "", end: "", isCustomName: false });
       setEditingMedId(null);
       setPrescriptionModalOpen(false);
       fetchData();
@@ -836,14 +849,12 @@ export default function PatientDetail() {
 
   const handleCancelEdit = () => {
     setEditingMedId(null);
-    setNewMed({ name: "", dosage: "", time: "08:00", start: "", end: "", isCustomName: false });
+    setNewMed({ name: "", dosage: "", time: "08:00 AM", start: "", end: "", isCustomName: false });
     setPrescriptionModalOpen(false);
   };
 
-  // --- SMART SOFT DELETE IMPLEMENTATION ---
   const handleDeletePrescription = async (medId: number) => {
     try {
-      // Soft Delete: Archive it so past patient logs don't break
       await supabase.from('medications').update({ is_archived: true }).eq('id', medId);
       triggerAlert(t("success"), t("prescriptionRemoved"), "success");
       fetchData();
@@ -891,17 +902,18 @@ export default function PatientDetail() {
 
       createAuditLog("Patient Discharged", "Treatment Lifecycle", patient.full_name, { action: `Marked ${selectedDischargeType} & Scheduled Follow-ups` });
 
-      // DISPATCH PUSH NOTIFICATION
       await sendNotificationToPatient({
         patientId: id as string,
         doctorId: user?.id,
         title: "Treatment Completed! 🏆",
-        message: "Congratulations! You have been officially discharged and marked as Cured.",
+        message: "Congratulations! You have been officially discharged from active monitoring.",
       });
 
       setConfirmSafetyModalOpen(false);
       setDischargeModalOpen(false);
       triggerAlert(t("success"), t("dischargeSuccess"), "success");
+
+      setPatient((prev: any) => ({ ...prev, status: selectedDischargeType }));
       
       if (generateCertificate) {
         setTimeout(() => {
@@ -916,6 +928,31 @@ export default function PatientDetail() {
       triggerAlert(t("error"), err.message, "error");
     } finally {
       setDischarging(false);
+    }
+  };
+
+  const confirmPurge = async () => {
+    setIsPurging(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Authentication error");
+
+      await supabase.from('medications').delete().eq('user_id', id);
+      await supabase.from('roadmap').delete().eq('patient_id', id);
+      await supabase.from('patient_vitals').delete().eq('patient_id', id);
+      await supabase.from('doctor_notes').delete().eq('user_id', id);
+      await supabase.from('dssm_monitoring').delete().eq('patient_id', id);
+      
+      await supabase.from('connections').delete()
+        .eq('patient_id', id)
+        .eq('doctor_id', user.id);
+
+      navigate("/doctor/patients");
+    } catch (err: any) {
+      triggerAlert(t("error"), err.message, "error");
+    } finally {
+      setIsPurging(false);
+      setPurgeModalOpen(false);
     }
   };
 
@@ -978,7 +1015,6 @@ export default function PatientDetail() {
   const todayD = new Date();
   todayD.setHours(0,0,0,0);
   
-  // Dynamic Medication Filtering based on dates
   const activeMeds = meds.filter((med) => {
     const s = new Date(med.start_date); s.setHours(0,0,0,0);
     const e = new Date(med.end_date); e.setHours(0,0,0,0);
@@ -1140,7 +1176,7 @@ export default function PatientDetail() {
       </Dialog>
 
       <Dialog open={dischargeModalOpen} onOpenChange={setDischargeModalOpen}>
-        <DialogContent className="sm:max-w-[500px] rounded-2xl p-6 bg-white font-sans">
+        <DialogContent className="sm:max-w-[500px] rounded-2xl p-6 bg-white font-sans print:hidden">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-slate-900">Patient Discharge Classification</DialogTitle>
             <DialogDescription className="text-slate-500 pt-2">
@@ -1190,7 +1226,7 @@ export default function PatientDetail() {
       </Dialog>
 
       <Dialog open={confirmSafetyModalOpen} onOpenChange={setConfirmSafetyModalOpen}>
-        <DialogContent className="sm:max-w-[400px] rounded-2xl p-6 bg-white font-sans border border-slate-200 shadow-xl">
+        <DialogContent className="sm:max-w-[400px] rounded-2xl p-6 bg-white font-sans border border-slate-200 shadow-xl print:hidden">
           <div className="mx-auto w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-4">
             <AlertCircle className="h-6 w-6 text-amber-700" />
           </div>
@@ -1222,6 +1258,39 @@ export default function PatientDetail() {
         </DialogContent>
       </Dialog>
 
+      {/* Purge Record Warning Dialog */}
+      <Dialog open={purgeModalOpen} onOpenChange={setPurgeModalOpen}>
+        <DialogContent className="sm:max-w-[420px] rounded-2xl p-6 bg-white font-sans border border-red-200 shadow-xl print:hidden">
+          <div className="mx-auto w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4 border border-red-200">
+            <ShieldAlert className="h-6 w-6 text-red-700" />
+          </div>
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-red-700 text-center">Permanent Data Purge</DialogTitle>
+            <DialogDescription className="text-slate-600 text-sm text-center mt-2 leading-relaxed">
+              You are about to permanently wipe all medical tracking data (Vitals, Meds, Roadmaps) and unlink <strong>{patient?.full_name}</strong> from your clinic. <br/><br/><strong>This action cannot be undone.</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-6 flex gap-2 sm:justify-center w-full">
+            <Button 
+              variant="outline" 
+              className="flex-1 rounded-xl border-slate-200 font-semibold"
+              onClick={() => setPurgeModalOpen(false)}
+              disabled={isPurging}
+            >
+              Cancel
+            </Button>
+            <Button 
+              className="flex-1 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold"
+              onClick={confirmPurge}
+              disabled={isPurging}
+            >
+              {isPurging ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Purge Data
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="space-y-6 animate-fade-in pb-10 print:hidden">
         
         {/* --- STICKY ACTION HEADER --- */}
@@ -1230,18 +1299,63 @@ export default function PatientDetail() {
             <ArrowLeft className="h-4 w-4" /> {t("backBtn")}
           </Button>
 
-          {!isCured && (
+          <div className="flex items-center gap-2">
+            {!isCured && (
+              <Button 
+                onClick={() => setDischargeModalOpen(true)} 
+                className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl gap-2 font-bold shadow-sm px-5"
+              >
+                <FileCheck2 className="h-4 w-4" />
+                {t("dischargeBtn")}
+              </Button>
+            )}
+            
             <Button 
-              onClick={() => setDischargeModalOpen(true)} 
-              className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl gap-2 font-bold shadow-sm px-5"
+              variant="outline"
+              onClick={() => setPurgeModalOpen(true)} 
+              className="border-red-200 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white rounded-xl gap-2 font-bold shadow-sm px-4 transition-colors"
             >
-              <FileCheck2 className="h-4 w-4" />
-              {t("dischargeBtn")}
+              <Trash2 className="h-4 w-4" />
+              <span className="hidden sm:inline">{t("purgeData")}</span>
             </Button>
-          )}
+          </div>
         </div>
 
-        {!isCured && startDate && endDate && (
+        {/* --- SMART CLINICAL SETUP WIZARD --- */}
+        {!isCured && (!startDate || meds.length === 0) && (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 shadow-sm flex items-start gap-4">
+            <div className="bg-blue-100 p-2 rounded-full mt-0.5 shrink-0">
+              <Info className="h-5 w-5 text-blue-700" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-blue-900 font-bold text-lg mb-1">Clinical Setup Required</h3>
+              <p className="text-blue-800 text-sm mb-4">This patient's medical tracking is incomplete. Please finish the clinical setup to begin monitoring their adherence.</p>
+              
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Button 
+                  onClick={() => setActiveTab('roadmap')} 
+                  variant="outline"
+                  className={`rounded-xl h-10 font-bold border-blue-300 hover:bg-blue-100 ${!startDate ? 'bg-white text-blue-700 shadow-sm border-blue-400' : 'bg-blue-50/50 text-blue-500 opacity-60'}`}
+                >
+                  {!startDate ? <div className="h-2 w-2 rounded-full bg-blue-500 mr-2 animate-pulse"/> : <CheckCircle2 className="h-4 w-4 mr-2"/>}
+                  Step 1: Set TB Roadmap
+                </Button>
+                
+                <Button 
+                  onClick={() => setActiveTab('clinical')} 
+                  variant="outline"
+                  disabled={!startDate}
+                  className={`rounded-xl h-10 font-bold border-blue-300 hover:bg-blue-100 ${startDate && meds.length === 0 ? 'bg-white text-blue-700 shadow-sm border-blue-400' : 'bg-blue-50/50 text-blue-500 opacity-60'}`}
+                >
+                  {startDate && meds.length === 0 ? <div className="h-2 w-2 rounded-full bg-blue-500 mr-2 animate-pulse"/> : <CheckCircle2 className="h-4 w-4 mr-2"/>}
+                  Step 2: Add Prescriptions
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!isCured && startDate && endDate && meds.length > 0 && (
           <div className={`rounded-xl border p-4 flex items-start gap-4 shadow-sm ${phaseColor}`}>
             <Info className="h-6 w-6 mt-0.5 shrink-0" />
             <div>
@@ -1269,7 +1383,7 @@ export default function PatientDetail() {
                     <h2 className="text-3xl font-bold text-black tracking-tight">{patient?.full_name}</h2>
                     {patient?.risk_level && (
                       <Badge variant="outline" className={`font-extrabold px-3 py-1 uppercase text-xs tracking-wider border ${getRiskColor(patient.risk_level)}`}>
-                        {patient.risk_level} 
+                        {isCured ? "Cleared" : patient.risk_level} 
                       </Badge>
                     )}
                     {/* --- SPUTUM CONVERSION BADGE --- */}
@@ -1298,10 +1412,10 @@ export default function PatientDetail() {
                 </div>
 
                 <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 sm:mt-1">
-                  <Badge variant="default" className={`px-3 py-1 font-semibold ${isCured ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-[#606C38] hover:bg-[#283618] text-white border-none"}`}>
+                  <Badge variant="default" className={`px-3 py-1 font-semibold ${isCured ? "bg-slate-100 text-slate-600 border border-slate-200" : "bg-[#606C38] hover:bg-[#283618] text-white border-none"}`}>
                     {patient?.status === 'cured' ? t("curedPatient") : (patient?.status === 'treatment_completed' ? t("treatmentCompletedPatient") : t("verifiedPatient"))}
                   </Badge>
-                  <Badge variant="outline" className={`font-bold px-3 py-1 ${isCured ? "bg-slate-100 text-slate-600 border-slate-300" : "bg-[#FEFAE0] text-[#606C38] border-[#DDE5B6]"}`}>
+                  <Badge variant="outline" className={`font-bold px-3 py-1 ${isCured ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-[#FEFAE0] text-[#606C38] border-[#DDE5B6]"}`}>
                     {phase}
                   </Badge>
                 </div>
@@ -1877,11 +1991,7 @@ export default function PatientDetail() {
                       </div>
                       
                       <div className="pt-4 space-y-3 border-t border-slate-100">
-                        <Button onClick={handleSaveTreatment} className="w-full bg-[#283618] hover:bg-[#1a2310] text-white rounded-xl h-11 font-semibold" disabled={saving}>
-                          {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                          {t("saveSync")}
-                        </Button>
-                        <Button onClick={handleGenerateProtocol} variant="outline" className="w-full border-[#606C38] text-[#606C38] hover:bg-[#FEFAE0] rounded-xl h-11 font-semibold" disabled={generating || !startDate}>
+                        <Button onClick={handleGenerateProtocol} className="w-full bg-[#606C38] hover:bg-[#283618] text-white rounded-xl h-11 font-semibold shadow-sm transition-all" disabled={generating || !startDate}>
                           {generating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Wand2 className="h-4 w-4 mr-2" />}
                           {t("autoGen")}
                         </Button>
@@ -1953,21 +2063,46 @@ export default function PatientDetail() {
       </div>
 
       {/* --- HIDDEN E-DISCHARGE CERTIFICATE (VISIBLE ONLY WHEN PRINTING) --- */}
-      <div className="hidden print:block font-sans text-black p-10 bg-white h-screen">
+      <div className="hidden print:block font-sans text-black bg-white min-h-screen w-full certificate-container">
+        
+        {/* ENFORCED PRINT STYLES - Hides the entire DashboardLayout structure */}
+        <style type="text/css" media="print">
+          {`
+            @page { size: auto; margin: 0mm; }
+            body * { visibility: hidden !important; }
+            .certificate-container, .certificate-container * { visibility: visible !important; }
+            .certificate-container { 
+              position: fixed !important; 
+              left: 0 !important; 
+              top: 0 !important; 
+              width: 100vw !important; 
+              height: 100vh !important;
+              margin: 0 !important;
+              padding: 2cm 2cm !important;
+              background: white !important;
+              z-index: 99999 !important;
+              box-sizing: border-box !important;
+            }
+          `}
+        </style>
+
         <div className="flex items-center justify-between border-b-2 border-slate-800 pb-6 mb-8">
           <div>
             <h1 className="text-3xl font-extrabold tracking-tight">MUNICIPALITY OF CARMONA</h1>
             <h2 className="text-xl font-bold text-slate-600 mt-1">TB DOTS CLINIC</h2>
           </div>
           <div className="text-right">
-            <h1 className="text-3xl font-extrabold tracking-tight">TEREA</h1>
-            <p className="text-sm font-bold text-slate-500">E-DISCHARGE CERTIFICATE</p>
+            <div className="flex items-center justify-end gap-3">
+              <img src="/LogoNoBG.png" alt="TEREA Logo" className="h-10 w-10 object-contain drop-shadow-sm" />
+              <h1 className="text-3xl font-extrabold tracking-tight">TEREA</h1>
+            </div>
+            <p className="text-sm font-bold text-slate-500 mt-1">E-DISCHARGE CERTIFICATE</p>
           </div>
         </div>
 
         <div className="space-y-8">
           <p className="text-lg leading-relaxed text-justify">
-            This is to certify that <strong>{patient?.full_name?.toUpperCase()}</strong>, a resident of Barangay {patient?.barangay || "Carmona"}, has successfully completed the required Directly Observed Treatment, Short-course (DOTS) regimen under the supervision of the Carmona Health Center.
+            This is to certify that <strong>{patient?.full_name?.toUpperCase()}</strong>, a resident of Barangay {patient?.barangay || "Carmona"}, has completed medical review under the supervision of the Carmona Health Center.
           </p>
 
           <div className="grid grid-cols-2 gap-y-6 text-md bg-slate-50 p-6 rounded-lg border border-slate-200">
@@ -1999,9 +2134,16 @@ export default function PatientDetail() {
             </div>
           </div>
 
-          <p className="text-md italic text-slate-600 pt-4">
-            The patient is hereby declared cleared of active Tuberculosis infection and is advised to return for the scheduled 6-month and 1-year post-treatment follow-ups as registered in their digital roadmap.
-          </p>
+          {/* DYNAMIC MEDICAL ACCURACY TEXT BASED ON DISCHARGE STATUS */}
+          {patient?.status === 'cured' ? (
+            <p className="text-md italic text-slate-600 pt-4">
+              The patient has successfully completed the DOTS regimen and presented a negative final sputum smear. The patient is hereby declared cleared of active Tuberculosis infection and is advised to return for the scheduled 6-month and 1-year post-treatment follow-ups as registered in their digital roadmap.
+            </p>
+          ) : (
+            <p className="text-md italic text-slate-600 pt-4">
+              The patient has officially completed the required treatment duration. While a final negative sputum smear is unverified, active clinical monitoring is now concluded. The patient is advised to return for their scheduled 6-month and 1-year post-treatment follow-ups.
+            </p>
+          )}
 
           <div className="pt-20 flex justify-between items-end">
             <div>

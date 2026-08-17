@@ -53,6 +53,7 @@ interface User {
   age?: number;
   gender?: string;
   verification_status?: "Pending" | "Verified" | "Rejected";
+  treatment_status?: string;
   id_attachment_url?: string;
 }
 
@@ -141,6 +142,7 @@ export default function UserManagement() {
             age: d.age,
             gender: d.gender,
             verification_status: d.verification_status || "Pending",
+            treatment_status: d.status,
             id_attachment_url: d.id_attachment_url
           };
         });
@@ -189,7 +191,7 @@ export default function UserManagement() {
     return {
       totalDoctors: users.filter(u => u.role === 'doctor').length,
       pendingVerifications: users.filter(u => u.role === 'patient' && u.verification_status === 'Pending').length,
-      highRiskPatients: users.filter(u => u.role === 'patient' && u.risk_level === 'High').length
+      highRiskPatients: users.filter(u => u.role === 'patient' && u.risk_level === 'High' && u.treatment_status !== 'cured' && u.treatment_status !== 'treatment_completed').length
     };
   }, [users]);
 
@@ -519,7 +521,9 @@ export default function UserManagement() {
       if (activeTab === "doctors") {
         rowText = `Name: ${u.name}   |   Contact: ${u.contact}   |   Clinic: ${u.clinic_code || "N/A"}   |   License: ${u.license_number || "N/A"}`;
       } else {
-        rowText = `Name: ${u.name}   |   Contact: ${u.contact}   |   Risk: ${u.risk_level || "Pending"}   |   Barangay: ${u.barangay || "N/A"}`;
+        const isDischarged = u.treatment_status === 'cured' || u.treatment_status === 'treatment_completed';
+        const displayRisk = isDischarged ? "Cleared" : u.risk_level;
+        rowText = `Name: ${u.name}   |   Contact: ${u.contact}   |   Risk: ${displayRisk || "Pending"}   |   Barangay: ${u.barangay || "N/A"}`;
       }
       
       doc.text(rowText, 14, yPos);
@@ -553,7 +557,9 @@ export default function UserManagement() {
       if (activeTab === "doctors") {
         csvRows.push(`"${u.id}","${u.name}","${u.email}","${u.contact}","${u.clinic_code || ''}","${u.license_number || ''}"`);
       } else {
-        csvRows.push(`"${u.id}","${u.name}","${u.email}","${u.age || ''}","${u.gender || ''}","${u.contact}","${u.barangay || ''}","${u.risk_level || 'Pending'}","${u.verification_status || 'Pending'}"`);
+        const isDischarged = u.treatment_status === 'cured' || u.treatment_status === 'treatment_completed';
+        const displayRisk = isDischarged ? "Cleared" : u.risk_level;
+        csvRows.push(`"${u.id}","${u.name}","${u.email}","${u.age || ''}","${u.gender || ''}","${u.contact}","${u.barangay || ''}","${displayRisk || 'Pending'}","${u.verification_status || 'Pending'}"`);
       }
     });
 
@@ -802,80 +808,86 @@ export default function UserManagement() {
               ) : paginatedUsers.length === 0 ? (
                 <TableRow><TableCell colSpan={7} className="h-24 text-center text-slate-500">{t("noUsersFound")}</TableCell></TableRow>
               ) : (
-                paginatedUsers.map((user) => (
-                  <TableRow 
-                    key={user.id} 
-                    className={`hover:bg-slate-50 transition-colors ${selectedUserIds.has(user.id) ? 'bg-slate-50/80' : ''}`}
-                  >
-                    <TableCell className="text-center">
-                      <Checkbox 
-                        checked={selectedUserIds.has(user.id)}
-                        onCheckedChange={() => toggleUserSelection(user.id)}
-                        aria-label={`Select ${user.name}`}
-                        className="data-[state=checked]:bg-[#606C38] data-[state=checked]:border-[#606C38]"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-medium text-slate-900">{user.name}</div>
-                      <div className="text-xs text-slate-500">{user.email}</div>
-                    </TableCell>
-                    <TableCell className="text-slate-700">{user.contact}</TableCell>
-                    
-                    {activeTab === "doctors" ? (
-                      <>
-                        <TableCell className="text-slate-600">{user.clinic_code || "N/A"}</TableCell>
-                        <TableCell className="text-slate-600 font-medium">{user.license_number || "N/A"}</TableCell>
-                      </>
-                    ) : (
-                      <>
-                        <TableCell>
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                            user.verification_status === 'Verified' ? 'bg-emerald-100 text-emerald-800' : 
-                            user.verification_status === 'Rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
-                          }`}>
-                            {user.verification_status || "Pending"}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                            user.risk_level === 'High' ? 'bg-red-100 text-red-800' : 
-                            user.risk_level === 'Medium' ? 'bg-amber-100 text-amber-800' :
-                            user.risk_level === 'Low' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
-                          }`}>
-                            {user.risk_level === 'High' ? t("highRiskFilter") : user.risk_level === 'Medium' ? t("mediumRiskFilter") : user.risk_level === 'Low' ? t("lowRiskFilter") : "Pending"}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-slate-600">{user.barangay || "N/A"}</TableCell>
-                      </>
-                    )}
+                paginatedUsers.map((user) => {
+                  const isDischarged = user.role === 'patient' && (user.treatment_status === 'cured' || user.treatment_status === 'treatment_completed');
+                  const displayRisk = isDischarged ? "Cleared" : user.risk_level;
 
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-700 hover:bg-slate-100">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="rounded-xl border-slate-200 bg-white shadow-lg">
-                          {activeTab === "patients" && (
-                            <DropdownMenuItem onClick={() => handleReviewID(user)} className="cursor-pointer font-medium text-blue-600">
-                              <Eye className="mr-2 h-4 w-4" /> {t("viewId")}
+                  return (
+                    <TableRow 
+                      key={user.id} 
+                      className={`hover:bg-slate-50 transition-colors ${selectedUserIds.has(user.id) ? 'bg-slate-50/80' : ''} ${isDischarged ? 'opacity-60 bg-slate-50/50 grayscale-[0.2]' : ''}`}
+                    >
+                      <TableCell className="text-center">
+                        <Checkbox 
+                          checked={selectedUserIds.has(user.id)}
+                          onCheckedChange={() => toggleUserSelection(user.id)}
+                          aria-label={`Select ${user.name}`}
+                          className="data-[state=checked]:bg-[#606C38] data-[state=checked]:border-[#606C38]"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium text-slate-900">{user.name}</div>
+                        <div className="text-xs text-slate-500">{user.email}</div>
+                      </TableCell>
+                      <TableCell className="text-slate-700">{user.contact}</TableCell>
+                      
+                      {activeTab === "doctors" ? (
+                        <>
+                          <TableCell className="text-slate-600">{user.clinic_code || "N/A"}</TableCell>
+                          <TableCell className="text-slate-600 font-medium">{user.license_number || "N/A"}</TableCell>
+                        </>
+                      ) : (
+                        <>
+                          <TableCell>
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                              user.verification_status === 'Verified' ? 'bg-emerald-100 text-emerald-800' : 
+                              user.verification_status === 'Rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
+                            }`}>
+                              {user.verification_status || "Pending"}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                              displayRisk === 'Cleared' ? 'bg-slate-100 text-slate-500 border border-slate-200' :
+                              displayRisk === 'High' ? 'bg-red-100 text-red-800' : 
+                              displayRisk === 'Medium' ? 'bg-amber-100 text-amber-800' :
+                              displayRisk === 'Low' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                            }`}>
+                              {displayRisk === 'Cleared' ? 'Cleared' : displayRisk === 'High' ? t("highRiskFilter") : displayRisk === 'Medium' ? t("mediumRiskFilter") : displayRisk === 'Low' ? t("lowRiskFilter") : "Pending"}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-slate-600">{user.barangay || "N/A"}</TableCell>
+                        </>
+                      )}
+
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="rounded-xl border-slate-200 bg-white shadow-lg">
+                            {activeTab === "patients" && (
+                              <DropdownMenuItem onClick={() => handleReviewID(user)} className="cursor-pointer font-medium text-blue-600">
+                                <Eye className="mr-2 h-4 w-4" /> {t("viewId")}
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem onClick={() => { setEditingUser({ ...user }); setEditDialogOpen(true); }} className="cursor-pointer font-medium text-slate-700">{t("editDetails")}</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleResetPassword(user)} className="cursor-pointer font-medium text-slate-700">{t("resetPassword")}</DropdownMenuItem>
+                            <DropdownMenuItem className="text-red-600 cursor-pointer font-medium focus:text-red-700 focus:bg-red-50" onClick={() => handleDeleteUser(user)}>
+                              {t("deleteUser")}
                             </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem onClick={() => { setEditingUser({ ...user }); setEditDialogOpen(true); }} className="cursor-pointer font-medium text-slate-700">{t("editDetails")}</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleResetPassword(user)} className="cursor-pointer font-medium text-slate-700">{t("resetPassword")}</DropdownMenuItem>
-                          <DropdownMenuItem className="text-red-600 cursor-pointer font-medium focus:text-red-700 focus:bg-red-50" onClick={() => handleDeleteUser(user)}>
-                            {t("deleteUser")}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
-          
+            
           {/* Pagination Controls */}
           {!loading && processedData.length > 0 && (
             <div className="flex items-center justify-between border-t border-slate-200 px-6 py-3">

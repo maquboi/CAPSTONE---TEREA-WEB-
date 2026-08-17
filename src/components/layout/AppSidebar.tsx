@@ -146,8 +146,8 @@ export function AppSidebar({ role, collapsed, onToggleCollapsed }: AppSidebarPro
 
       <div className={cn("flex h-16 items-center border-b border-[#DDE5B6] px-4", collapsed && "justify-center px-2")}>
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#606C38] shadow-sm">
-            <span className="text-lg font-bold text-white">T</span>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-black overflow-hidden shadow-sm border border-slate-800 shrink-0 p-1">
+            <img src="/LogoNoBG.png" alt="TEREA Logo" className="h-full w-full object-contain" />
           </div>
           {!collapsed && (
             <div>
