@@ -65,6 +65,11 @@ export default function Login() {
         throw new Error("Profile not found. Contact IT support.");
       }
 
+      // 1. GATEKEEPER: Strict Patient Block
+      if (profile.role === "patient") {
+        throw new Error("Access Denied: Patients must use the TEREA Mobile App.");
+      }
+
       if (profile.role !== role) {
         throw new Error(`This account is not registered as a ${role}.`);
       }
