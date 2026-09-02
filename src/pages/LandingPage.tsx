@@ -100,9 +100,8 @@ export default function LandingPage() {
               <span className="hidden sm:inline">Staff Portal</span>
             </button>
 
-            {/* Desktop Download Button */}
             <a 
-              href="https://github.com/maquboi/CAPSTONE---TEREA-WEB-/releases/latest/download/app-release.apk" 
+              href="https://github.com/maquboi/CAPSTONE---TEREA-WEB-/releases/latest/download/TEREA-v1.0.apk" 
               target="_blank"
               rel="noopener noreferrer"
               className="btn-premium hidden sm:flex items-center gap-2 text-sm font-bold text-white bg-[#606C38] hover:bg-[#4A5529] px-5 py-2.5 rounded-xl shadow-sm transition-all"
@@ -139,7 +138,7 @@ export default function LandingPage() {
               {/* Mobile Only Download Button (Shows only on small screens) */}
               <div className="sm:hidden pt-2 pb-1" style={{ animationDelay: "290ms" }}>
                 <a 
-                  href="https://github.com/maquboi/CAPSTONE---TEREA-WEB-/releases/latest/download/app-release.apk" 
+                  href="https://github.com/maquboi/CAPSTONE---TEREA-WEB-/releases/latest/download/TEREA-v1.0.apk" 
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-center gap-2 w-full text-base font-bold text-white bg-[#606C38] hover:bg-[#2D3B1E] px-5 py-3.5 rounded-xl shadow-md transition-colors"
@@ -316,9 +315,8 @@ export default function LandingPage() {
           </div>
         
           <div className="flex items-center gap-4">
-            {/* Footer Download Link */}
             <a 
-              href="https://github.com/maquboi/CAPSTONE---TEREA-WEB-/releases/latest/download/app-release.apk" 
+              href="https://github.com/maquboi/CAPSTONE---TEREA-WEB-/releases/latest/download/TEREA-v1.0.apk" 
               target="_blank"
               rel="noopener noreferrer"
               className="hidden sm:flex items-center gap-2 text-sm font-semibold text-[#606C38] hover:text-[#2D3B1E] transition-colors"
