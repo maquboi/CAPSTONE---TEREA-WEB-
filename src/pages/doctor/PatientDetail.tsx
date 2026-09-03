@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import {
   Table,
@@ -28,7 +27,6 @@ import {
   CalendarDays,
   MessageSquare,
   Check,
-  TrendingUp,
   AlertCircle,
   Plus,
   Wand2,
@@ -48,7 +46,10 @@ import {
   ClipboardList,
   X,
   ShieldAlert,
-  ArrowRightCircle
+  Printer,
+  CalendarPlus,
+  RefreshCw,
+  Undo2
 } from "lucide-react";
 import { 
   LineChart, 
@@ -63,8 +64,6 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup
 } from "@/components/ui/select";
 import { useLanguage } from "../admin/LanguageContext";
-
-// IMPORT YOUR NEW NOTIFICATION DISPATCHER
 import { sendNotificationToPatient } from "@/lib/notifications";
 
 const translations: Record<string, Record<string, string>> = {
@@ -122,7 +121,7 @@ const translations: Record<string, Record<string, string>> = {
     notStarted: "Not Started",
     intensivePhase: "Intensive Phase",
     continuationPhase: "Continuation Phase",
-    postCarePhase: "Post-Care Archival",
+    postCarePhase: "Post-Care Surveillance",
     dischargeBtn: "Discharge Patient",
     dischargeSuccess: "Patient successfully discharged and follow-ups scheduled.",
     error: "Error",
@@ -140,7 +139,8 @@ const translations: Record<string, Record<string, string>> = {
     early: "Early",
     late: "Late",
     cancelEdit: "Cancel",
-    purgeData: "Purge Record",
+    purgeData: "Delete Record",
+    printReport: "Print E-Discharge Certificate"
   },
   fil: {
     backBtn: "Bumalik sa Listahan ng Pasyente",
@@ -196,7 +196,7 @@ const translations: Record<string, Record<string, string>> = {
     notStarted: "Hindi pa nagsisimula",
     intensivePhase: "Intensive Phase",
     continuationPhase: "Continuation Phase",
-    postCarePhase: "Post-Care Archival",
+    postCarePhase: "Post-Care Surveillance",
     dischargeBtn: "I-discharge ang Pasyente",
     dischargeSuccess: "Matagumpay na na-discharge ang pasyente at naiskedyul ang follow-ups.",
     error: "Error",
@@ -215,6 +215,7 @@ const translations: Record<string, Record<string, string>> = {
     late: "Huli",
     cancelEdit: "Kanselahin",
     purgeData: "Burahin ang Rekord",
+    printReport: "I-print ang E-Discharge Certificate"
   }
 };
 
@@ -237,10 +238,8 @@ export default function PatientDetail() {
   const { language } = useLanguage();
   const t = (key: string) => translations[language]?.[key] || translations.en[key] || key;
 
-  // View Layout State
   const [activeTab, setActiveTab] = useState<'overview' | 'clinical' | 'roadmap'>('overview');
 
-  // Centralized Alert State
   const [alert, setAlert] = useState({ open: false, title: "", message: "", type: "success" as "success" | "error" });
   const triggerAlert = (title: string, message: string, type: "success" | "error" = "success") => {
     setAlert({ open: true, title, message, type });
@@ -254,16 +253,23 @@ export default function PatientDetail() {
   const [generating, setGenerating] = useState(false);
   const [postingMemo, setPostingMemo] = useState(false);
   
-  // Modal States
   const [dischargeModalOpen, setDischargeModalOpen] = useState(false);
   const [confirmSafetyModalOpen, setConfirmSafetyModalOpen] = useState(false); 
   const [weightModalOpen, setWeightModalOpen] = useState(false);
   const [memoModalOpen, setMemoModalOpen] = useState(false);
   const [prescriptionModalOpen, setPrescriptionModalOpen] = useState(false);
-  const [purgeModalOpen, setPurgeModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [milestoneModalOpen, setMilestoneModalOpen] = useState(false);
+
+  // Relapse & Rollback Modals
+  const [relapseModalOpen, setRelapseModalOpen] = useState(false);
+  const [isRelapsing, setIsRelapsing] = useState(false);
+  const [restoreModalOpen, setRestoreModalOpen] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
 
   const [discharging, setDischarging] = useState(false);
-  const [isPurging, setIsPurging] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [savingMilestone, setSavingMilestone] = useState(false);
   const [generateCertificate, setGenerateCertificate] = useState(true);
   const [selectedDischargeType, setSelectedDischargeType] = useState<'cured' | 'treatment_completed' | null>(null);
 
@@ -272,14 +278,12 @@ export default function PatientDetail() {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
   
-  // Weight Tracker States
   const [vitalsHistory, setVitalsHistory] = useState<any[]>([]);
   const [editingVitalId, setEditingVitalId] = useState<string | null>(null);
   const [editingVitalWeight, setEditingVitalWeight] = useState<string>("");
   
   const [todayLogs, setTodayLogs] = useState<any[]>([]);
 
-  // DOH Form 4 Tracking Fields
   const [registrationGroup, setRegistrationGroup] = useState("");
   const [anatomicalSite, setAnatomicalSite] = useState("");
   const [dssmResults, setDssmResults] = useState({ month0: "", month2: "", month3: "", month4: "", month5: "", month6: "" });
@@ -293,9 +297,10 @@ export default function PatientDetail() {
   const [doctorName, setDoctorName] = useState("");
 
   const [newMed, setNewMed] = useState({ name: "", dosage: "", time: "08:00 AM", start: "", end: "", isCustomName: false });
-  const [editingMedId, setEditingMedId] = useState<number | null>(null); 
+  const [editingMedId, setEditingMedId] = useState<string | null>(null); 
   
-  // Historical Log Engine
+  const [milestoneForm, setMilestoneForm] = useState({ id: null as string | null, title: "", appointment_date: "", location: "Carmona Health Center", type: "follow-up" });
+
   const [historicalLogs, setHistoricalLogs] = useState<any[]>([]);
   const [logPage, setLogPage] = useState(0);
   const [totalLogCount, setTotalLogCount] = useState(0);
@@ -303,7 +308,6 @@ export default function PatientDetail() {
   const [dateRangeFilter, setDateRangeFilter] = useState<'all' | 'day' | 'week' | 'month'>('all'); 
   const LOGS_PER_PAGE = 7;
 
-  // --- SMART INTELLIGENCE LOGIC ---
   const checkSmartAlert = (text: string) => {
     const keywords = ['vision', 'blur', 'numb', 'yellow', 'jaundice', 'pain', 'rash', 'itch', 'vomit', 'nausea', 'hearing', 'ringing', 'dizzy', 'seizure', 'joint', 'tingling', 'blood'];
     const lowerText = text.toLowerCase();
@@ -335,6 +339,22 @@ export default function PatientDetail() {
     const hrs = parseInt(parts[0]);
     const mins = parts[1];
     return `${hrs % 12 || 12}:${mins} ${hrs >= 12 ? 'PM' : 'AM'}`;
+  };
+
+  // --- HELPER: TABLET COUNT EXTRACTION FOR VISUAL DOSAGE ---
+  const getTabletCount = (weight: number) => {
+    if (weight >= 30 && weight <= 37) return 2;
+    if (weight >= 38 && weight <= 54) return 3;
+    if (weight >= 55 && weight <= 70) return 4;
+    if (weight > 70) return 5;
+    return 0;
+  };
+
+  const calculateDosage = (weight: number, isContinuation: boolean) => {
+    const tablets = getTabletCount(weight);
+    if (tablets === 0) return "Consult Specialist (Under 30kg)";
+    if (isContinuation) return `${tablets} tablets daily (Isoniazid + Rifampicin)`;
+    return `${tablets} tablets daily (HRZE: Rifampicin, Isoniazid, Pyrazinamide, Ethambutol)`;
   };
 
   useEffect(() => {
@@ -697,14 +717,42 @@ export default function PatientDetail() {
         return result.toISOString().split('T')[0];
       };
 
+      const currentWeightNum = vitalsHistory.length > 0 ? vitalsHistory[0].weight_kg : (parseFloat(currentWeight) || 50);
+      const calculatedIntensiveDosage = calculateDosage(currentWeightNum, false);
+      const calculatedContinuationDosage = calculateDosage(currentWeightNum, true);
+
       let protocolMilestones = [];
       let presetMeds = [];
 
       if (tbRegimen.includes("4-Month")) {
-        // BPaLM Protocol
         protocolMilestones = [
-          { patient_id: id, doctor_id: user?.id, title: "End of Month 2 Sputum Test", location: "TB DOTS Clinic", appointment_date: addDays(start, 60), status: "pending", type: "protocol" },
-          { patient_id: id, doctor_id: user?.id, title: "Final Month 4 Cure Assessment", location: "TB DOTS Clinic", appointment_date: addDays(start, 120), status: "pending", type: "protocol" }
+          { 
+            patient_id: id, 
+            doctor_id: user?.id, 
+            title: "Treatment Initiation & Baseline Clinical Assessment (BPaLM)", 
+            location: "Carmona Health Center", 
+            appointment_date: start.toISOString().split('T')[0], 
+            status: "completed", 
+            type: "protocol" 
+          },
+          { 
+            patient_id: id, 
+            doctor_id: user?.id, 
+            title: "End of Month 2 Sputum Test", 
+            location: "Carmona Health Center", 
+            appointment_date: addDays(start, 60), 
+            status: "pending", 
+            type: "protocol" 
+          },
+          { 
+            patient_id: id, 
+            doctor_id: user?.id, 
+            title: "Final Month 4 Cure Assessment", 
+            location: "Carmona Health Center", 
+            appointment_date: addDays(start, 120), 
+            status: "pending", 
+            type: "protocol" 
+          }
         ];
 
         presetMeds = [
@@ -714,22 +762,61 @@ export default function PatientDetail() {
           { user_id: id, name: "Moxifloxacin (M)", dosage: "400mg", time: "08:00 AM", start_date: start.toISOString().split('T')[0], end_date: addDays(start, 120), is_taken: false, is_archived: false }
         ];
       } else {
-        // Standard 6-Month FDC Protocol
         protocolMilestones = [
-          { patient_id: id, doctor_id: user?.id, title: "End of Intensive Phase Sputum Test", location: "TB DOTS Clinic", appointment_date: addDays(start, 60), status: "pending", type: "protocol" },
-          { patient_id: id, doctor_id: user?.id, title: "Month 5 Sputum Follow-up", location: "TB DOTS Clinic", appointment_date: addDays(start, 150), status: "pending", type: "protocol" },
-          { patient_id: id, doctor_id: user?.id, title: "Final Sputum & Cure Assessment", location: "TB DOTS Clinic", appointment_date: addDays(start, 180), status: "pending", type: "protocol" }
+          { 
+            patient_id: id, 
+            doctor_id: user?.id, 
+            title: "Treatment Initiation & Baseline Assessment (Intensive Phase)", 
+            location: "Carmona Health Center", 
+            appointment_date: start.toISOString().split('T')[0], 
+            status: "completed", 
+            type: "protocol" 
+          },
+          { 
+            patient_id: id, 
+            doctor_id: user?.id, 
+            title: "End of Intensive Phase Sputum Test (Month 2)", 
+            location: "Carmona Health Center", 
+            appointment_date: addDays(start, 60), 
+            status: "pending", 
+            type: "protocol" 
+          },
+          { 
+            patient_id: id, 
+            doctor_id: user?.id, 
+            title: "Month 5 Sputum Follow-up (Continuation Phase)", 
+            location: "Carmona Health Center", 
+            appointment_date: addDays(start, 150), 
+            status: "pending", 
+            type: "protocol" 
+          },
+          { 
+            patient_id: id, 
+            doctor_id: user?.id, 
+            title: "Final Sputum & Cure Assessment (Month 6)", 
+            location: "Carmona Health Center", 
+            appointment_date: addDays(start, 180), 
+            status: "pending", 
+            type: "protocol" 
+          }
         ];
 
         presetMeds = [
-          { user_id: id, name: "FDC (Rifampicin + Isoniazid + Pyrazinamide + Ethambutol)", dosage: "Intensive (Weight-based)", time: "08:00 AM", start_date: start.toISOString().split('T')[0], end_date: addDays(start, 60), is_taken: false, is_archived: false },
-          { user_id: id, name: "FDC (Rifampicin + Isoniazid)", dosage: "Continuation (Weight-based)", time: "08:00 AM", start_date: addDays(start, 61), end_date: addDays(start, 180), is_taken: false, is_archived: false }
+          { user_id: id, name: "FDC (Rifampicin + Isoniazid + Pyrazinamide + Ethambutol)", dosage: calculatedIntensiveDosage, time: "08:00 AM", start_date: start.toISOString().split('T')[0], end_date: addDays(start, 60), is_taken: false, is_archived: false },
+          { user_id: id, name: "FDC (Rifampicin + Isoniazid)", dosage: calculatedContinuationDosage, time: "08:00 AM", start_date: addDays(start, 61), end_date: addDays(start, 180), is_taken: false, is_archived: false }
         ];
       }
 
+      await supabase.from('profiles').update({
+        treatment_start_date: startDate,
+        treatment_end_date: endDate,
+        tb_regimen: tbRegimen
+      }).eq('id', id);
+
+      await supabase.from('connections').update({ status: 'active' }).eq('patient_id', id);
+
       await supabase.from('roadmap').insert(protocolMilestones);
       
-      // Auto-populate prescriptions if empty to save the doctor time
       if (meds.length === 0) {
         await supabase.from('medications').insert(presetMeds);
       }
@@ -853,7 +940,7 @@ export default function PatientDetail() {
     setPrescriptionModalOpen(false);
   };
 
-  const handleDeletePrescription = async (medId: number) => {
+  const handleDeletePrescription = async (medId: string) => {
     try {
       await supabase.from('medications').update({ is_archived: true }).eq('id', medId);
       triggerAlert(t("success"), t("prescriptionRemoved"), "success");
@@ -863,7 +950,7 @@ export default function PatientDetail() {
     }
   };
 
-  const handleCompleteAppointment = async (apptId: number) => {
+  const handleCompleteAppointment = async (apptId: string) => {
     try {
       await supabase.from('roadmap').update({ status: 'completed' }).eq('id', apptId);
       triggerAlert(t("success"), t("milestoneCompleted"), "success");
@@ -871,7 +958,83 @@ export default function PatientDetail() {
     } catch (err: any) { console.error(err); }
   };
 
-  const handleCompleteAuditLogOnly = async (noteId: number) => {
+  const handleOpenMilestoneModal = (appt?: any) => {
+    if (appt) {
+      setMilestoneForm({
+        id: appt.id,
+        title: appt.title || "",
+        appointment_date: appt.appointment_date ? appt.appointment_date.split('T')[0] : "",
+        location: appt.location || "Carmona Health Center",
+        type: appt.type || "follow-up"
+      });
+    } else {
+      setMilestoneForm({
+        id: null,
+        title: "",
+        appointment_date: new Date().toISOString().split('T')[0],
+        location: "Carmona Health Center",
+        type: "follow-up"
+      });
+    }
+    setMilestoneModalOpen(true);
+  };
+
+  const handleSaveMilestone = async () => {
+    if (!milestoneForm.title || !milestoneForm.appointment_date) {
+      triggerAlert(t("error"), "Please provide both a title and date.", "error");
+      return;
+    }
+    setSavingMilestone(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (milestoneForm.id) {
+        const { error } = await supabase
+          .from('roadmap')
+          .update({
+            title: milestoneForm.title,
+            appointment_date: milestoneForm.appointment_date,
+            location: milestoneForm.location,
+            type: milestoneForm.type
+          })
+          .eq('id', milestoneForm.id);
+        if (error) throw error;
+        triggerAlert(t("success"), "Milestone updated successfully.", "success");
+      } else {
+        const { error } = await supabase
+          .from('roadmap')
+          .insert({
+            patient_id: id,
+            doctor_id: user?.id,
+            title: milestoneForm.title,
+            appointment_date: milestoneForm.appointment_date,
+            location: milestoneForm.location,
+            type: milestoneForm.type,
+            status: "pending"
+          });
+        if (error) throw error;
+        triggerAlert(t("success"), "New follow-up milestone scheduled.", "success");
+      }
+      setMilestoneModalOpen(false);
+      fetchData();
+    } catch (err: any) {
+      triggerAlert(t("error"), err.message, "error");
+    } finally {
+      setSavingMilestone(false);
+    }
+  };
+
+  const handleDeleteMilestone = async (milestoneId: string) => {
+    try {
+      const { error } = await supabase.from('roadmap').delete().eq('id', milestoneId);
+      if (error) throw error;
+      triggerAlert(t("success"), "Milestone removed.", "success");
+      fetchData();
+    } catch (err: any) {
+      triggerAlert(t("error"), err.message, "error");
+    }
+  };
+
+  const handleCompleteAuditLogOnly = async (noteId: string) => {
     try {
       await supabase.from('doctor_notes').update({ is_checked: true }).eq('id', noteId);
       fetchData();
@@ -889,9 +1052,13 @@ export default function PatientDetail() {
     try {
       await supabase.from('profiles').update({ status: selectedDischargeType }).eq('id', id);
 
-      const cureDate = new Date();
-      const in6Months = new Date(cureDate.setMonth(cureDate.getMonth() + 6)).toISOString().split('T')[0];
-      const in1Year = new Date(cureDate.setFullYear(cureDate.getFullYear() + 1)).toISOString().split('T')[0];
+      const d6 = new Date();
+      d6.setMonth(d6.getMonth() + 6);
+      const in6Months = d6.toISOString().split('T')[0];
+
+      const d1 = new Date();
+      d1.setFullYear(d1.getFullYear() + 1);
+      const in1Year = d1.toISOString().split('T')[0];
 
       const { data: { user } } = await supabase.auth.getUser();
 
@@ -906,7 +1073,7 @@ export default function PatientDetail() {
         patientId: id as string,
         doctorId: user?.id,
         title: "Treatment Completed! 🏆",
-        message: "Congratulations! You have been officially discharged from active monitoring.",
+        message: "Congratulations! You have been officially discharged from active monitoring. Post-treatment surveillance follow-ups are registered.",
       });
 
       setConfirmSafetyModalOpen(false);
@@ -931,8 +1098,57 @@ export default function PatientDetail() {
     }
   };
 
-  const confirmPurge = async () => {
-    setIsPurging(true);
+  const confirmRelapseFromDetail = async () => {
+    setIsRelapsing(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          status: 'verified',
+          registration_group: 'Relapse',
+          treatment_start_date: null,
+          treatment_end_date: null
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      await createAuditLog("Patient Re-admitted (Relapse)", "Treatment Lifecycle", patient?.full_name || "Patient", { note: "Re-enrolled under DOH Relapse Protocol." }, "warning");
+
+      setRelapseModalOpen(false);
+      triggerAlert("Patient Re-admitted", `${patient?.full_name} has been enrolled as a Relapse case. You may now configure a new protocol.`, "success");
+      fetchData();
+    } catch (err: any) {
+      triggerAlert(t("error"), err.message, "error");
+    } finally {
+      setIsRelapsing(false);
+    }
+  };
+
+  const confirmRestoreFromDetail = async () => {
+    setIsRestoring(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ status: 'verified' })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      await createAuditLog("Discharge Rollback", "Clinical Correction", patient?.full_name || "Patient", { note: "Accidental discharge reversed." });
+
+      setRestoreModalOpen(false);
+      triggerAlert("Patient Restored", `${patient?.full_name} has been restored to active monitoring roster.`, "success");
+      fetchData();
+    } catch (err: any) {
+      triggerAlert(t("error"), err.message, "error");
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    setIsDeleting(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Authentication error");
@@ -951,8 +1167,8 @@ export default function PatientDetail() {
     } catch (err: any) {
       triggerAlert(t("error"), err.message, "error");
     } finally {
-      setIsPurging(false);
-      setPurgeModalOpen(false);
+      setIsDeleting(false);
+      setDeleteModalOpen(false);
     }
   };
 
@@ -977,6 +1193,7 @@ export default function PatientDetail() {
 
   let timeProgress = 0;
   let daysLeft = 0;
+  let elapsedDays = 0;
   let phase = t("notStarted");
   let phaseColor = "bg-slate-100 text-slate-800 border-slate-300";
   let phaseDesc = "";
@@ -985,7 +1202,7 @@ export default function PatientDetail() {
     phase = t("postCarePhase");
     timeProgress = 100;
     phaseColor = "bg-emerald-100 text-emerald-800 border-emerald-300";
-    phaseDesc = "Patient has completed their required treatment protocol.";
+    phaseDesc = "Patient has completed active treatment. Post-treatment surveillance checkpoints are scheduled.";
   } else if (startDate && endDate) {
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -995,13 +1212,17 @@ export default function PatientDetail() {
     end.setHours(0,0,0,0);
     today.setHours(0,0,0,0);
     
-    const totalDuration = Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24));
-    const elapsed = Math.ceil((today.getTime() - start.getTime()) / (1000 * 3600 * 24));
+    const totalDuration = Math.max(Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24)), 1);
+    elapsedDays = Math.ceil((today.getTime() - start.getTime()) / (1000 * 3600 * 24));
     
-    timeProgress = Math.min(Math.max((elapsed / totalDuration) * 100, 0), 100);
-    daysLeft = Math.max(totalDuration - elapsed, 0);
+    timeProgress = Math.min(Math.max((elapsedDays / totalDuration) * 100, 0), 100);
+    daysLeft = Math.max(totalDuration - elapsedDays, 0);
 
-    if (elapsed <= 60) {
+    if (elapsedDays < 0) {
+      phase = t("notStarted");
+      phaseColor = "bg-slate-100 text-slate-800 border-slate-300";
+      phaseDesc = `Treatment is scheduled to start on ${new Date(startDate).toLocaleDateString()}.`;
+    } else if (elapsedDays <= 60 && !isSputumConverted) {
       phase = t("intensivePhase");
       phaseColor = "bg-amber-100 text-amber-900 border-amber-300";
       phaseDesc = "Patient is in the first 2 months (Intensive Phase). Standard protocol requires 4 drugs.";
@@ -1026,6 +1247,26 @@ export default function PatientDetail() {
     return todayD > e;
   });
 
+  const cleanDoctorName = useMemo(() => {
+    if (!doctorName) return "Dr. Attending Physician";
+    return `Dr. ${doctorName.replace(/^Dr\.?\s*/i, "")}`;
+  }, [doctorName]);
+
+  const initialWeight = vitalsHistory.length > 0 ? vitalsHistory[vitalsHistory.length - 1]?.weight_kg : null;
+  const latestWeight = vitalsHistory.length > 0 ? vitalsHistory[0]?.weight_kg : null;
+  const weightGain = (initialWeight !== null && latestWeight !== null) ? (latestWeight - initialWeight).toFixed(1) : null;
+  const recommendedTabletCount = latestWeight ? getTabletCount(latestWeight) : 0;
+
+  const sixMonthApptDate = appointments.find(a => a.title?.includes("6-Month"))?.appointment_date;
+  const oneYearApptDate = appointments.find(a => a.title?.includes("1-Year"))?.appointment_date;
+
+  // --- ITEM 3: DSSM TINT HELPER ---
+  const getDssmBadgeStyle = (result: string) => {
+    if (result === 'Negative') return 'border-emerald-300 bg-emerald-50 text-emerald-800 font-bold';
+    if (['1+', '2+', '3+'].includes(result)) return 'border-rose-300 bg-rose-50 text-rose-800 font-bold';
+    return 'border-slate-200 bg-white text-slate-700 font-medium';
+  };
+
   return (
     <DashboardLayout role="doctor" userName={doctorName || "Doctor"}>
       
@@ -1041,6 +1282,50 @@ export default function PatientDetail() {
             </DialogDescription>
           </DialogHeader>
           <Button className="mt-6 w-full rounded-xl bg-[#606C38] hover:bg-[#283618] text-white" onClick={() => setAlert({...alert, open: false})}>Okay</Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- RE-ADMIT RELAPSE DIALOG --- */}
+      <Dialog open={relapseModalOpen} onOpenChange={setRelapseModalOpen}>
+        <DialogContent className="sm:max-w-[440px] rounded-2xl p-6 bg-white font-sans border border-amber-200 shadow-xl print:hidden">
+          <div className="mx-auto w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-4 border border-amber-200">
+            <RefreshCw className="h-6 w-6 text-amber-700" />
+          </div>
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-slate-900 text-center">Enroll as TB Relapse Case?</DialogTitle>
+            <DialogDescription className="text-slate-600 text-sm text-center mt-2 leading-relaxed">
+              This will re-activate <strong>{patient?.full_name}</strong> under the DOH Relapse Protocol and clear active dates so a new regimen and roadmap can be configured.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-6 flex gap-2 sm:justify-center w-full">
+            <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setRelapseModalOpen(false)} disabled={isRelapsing}>Cancel</Button>
+            <Button className="flex-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold" onClick={confirmRelapseFromDetail} disabled={isRelapsing}>
+              {isRelapsing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+              Enroll as Relapse
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- RESTORE ACTIVE (ROLLBACK) DIALOG --- */}
+      <Dialog open={restoreModalOpen} onOpenChange={setRestoreModalOpen}>
+        <DialogContent className="sm:max-w-[420px] rounded-2xl p-6 bg-white font-sans border border-blue-200 shadow-xl print:hidden">
+          <div className="mx-auto w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-4 border border-blue-200">
+            <Undo2 className="h-6 w-6 text-blue-700" />
+          </div>
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-slate-900 text-center">Restore to Active Monitoring?</DialogTitle>
+            <DialogDescription className="text-slate-600 text-sm text-center mt-2 leading-relaxed">
+              Reverse accidental discharge for <strong>{patient?.full_name}</strong> and return them to active monitoring with all previous logs preserved?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-6 flex gap-2 sm:justify-center w-full">
+            <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setRestoreModalOpen(false)} disabled={isRestoring}>Cancel</Button>
+            <Button className="flex-1 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold" onClick={confirmRestoreFromDetail} disabled={isRestoring}>
+              {isRestoring ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Undo2 className="h-4 w-4 mr-2" />}
+              Confirm Restore
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -1082,16 +1367,16 @@ export default function PatientDetail() {
           <div className="py-4 space-y-4">
             <Textarea 
               placeholder={t("memoPlaceholder")} 
-              className="text-sm resize-none bg-slate-50 border-slate-200 h-32 rounded-xl focus-visible:ring-[#606C38]"
-              value={memoText}
-              onChange={(e) => setMemoText(e.target.value)}
+              className="text-sm resize-none bg-slate-50 border-slate-200 h-32 rounded-xl focus-visible:ring-[#606C38]" 
+              value={memoText} 
+              onChange={(e) => setMemoText(e.target.value)} 
             />
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setMemoModalOpen(false)}>Cancel</Button>
             <Button 
               onClick={handlePostMemo} 
-              disabled={postingMemo || !memoText.trim()}
+              disabled={postingMemo || !memoText.trim()} 
               className="bg-[#606C38] hover:bg-[#283618] text-white rounded-xl font-semibold"
             >
               {postingMemo ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <SendHorizontal className="h-4 w-4 mr-2" />}
@@ -1175,6 +1460,75 @@ export default function PatientDetail() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={milestoneModalOpen} onOpenChange={setMilestoneModalOpen}>
+        <DialogContent className="sm:max-w-[450px] rounded-2xl p-6 bg-white font-sans">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-slate-900">
+              {milestoneForm.id ? "Edit Roadmap Milestone" : "Add Custom Follow-up / Milestone"}
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 pt-1">
+              Schedule or modify customized appointments, sputum tests, or clinical follow-ups.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-3">
+            <div>
+              <Label className="text-xs font-bold text-slate-600 uppercase mb-1 block">Milestone Title</Label>
+              <Input 
+                placeholder="e.g. Month 3 Clinical Follow-up & X-Ray" 
+                value={milestoneForm.title} 
+                onChange={(e) => setMilestoneForm({ ...milestoneForm, title: e.target.value })} 
+                className="h-10 rounded-xl" 
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-bold text-slate-600 uppercase mb-1 block">Scheduled Date</Label>
+                <Input 
+                  type="date" 
+                  value={milestoneForm.appointment_date} 
+                  onChange={(e) => setMilestoneForm({ ...milestoneForm, appointment_date: e.target.value })} 
+                  className="h-10 rounded-xl" 
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-bold text-slate-600 uppercase mb-1 block">Category</Label>
+                <select 
+                  className="w-full bg-slate-50 border border-slate-200 text-sm font-medium rounded-xl h-10 px-3 focus:outline-none" 
+                  value={milestoneForm.type} 
+                  onChange={(e) => setMilestoneForm({ ...milestoneForm, type: e.target.value })}
+                >
+                  <option value="follow-up">Follow-up</option>
+                  <option value="protocol">Protocol Milestone</option>
+                  <option value="test">Lab / Diagnostic</option>
+                  <option value="post-treatment">Post-Treatment</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs font-bold text-slate-600 uppercase mb-1 block">Facility Location</Label>
+              <Input 
+                value={milestoneForm.location} 
+                onChange={(e) => setMilestoneForm({ ...milestoneForm, location: e.target.value })} 
+                className="h-10 rounded-xl" 
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setMilestoneModalOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={handleSaveMilestone} 
+              disabled={savingMilestone} 
+              className="bg-[#606C38] hover:bg-[#283618] text-white rounded-xl font-bold"
+            >
+              {savingMilestone ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+              Save Milestone
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={dischargeModalOpen} onOpenChange={setDischargeModalOpen}>
         <DialogContent className="sm:max-w-[500px] rounded-2xl p-6 bg-white font-sans print:hidden">
           <DialogHeader>
@@ -1187,10 +1541,10 @@ export default function PatientDetail() {
           <div className="flex items-center space-x-3 p-3 bg-slate-50 rounded-xl border border-slate-200 my-2">
             <input 
               type="checkbox" 
-              id="certToggle"
-              checked={generateCertificate}
-              onChange={(e) => setGenerateCertificate(e.target.checked)}
-              className="h-4 w-4 rounded text-[#606C38] focus:ring-[#606C38] border-slate-300 cursor-pointer"
+              id="certToggle" 
+              checked={generateCertificate} 
+              onChange={(e) => setGenerateCertificate(e.target.checked)} 
+              className="h-4 w-4 rounded text-[#606C38] focus:ring-[#606C38] border-slate-300 cursor-pointer" 
             />
             <label htmlFor="certToggle" className="text-sm font-semibold text-slate-700 cursor-pointer select-none">
               Auto-generate and print dynamic E-Clearance Certificate
@@ -1200,7 +1554,7 @@ export default function PatientDetail() {
           <div className="grid gap-4 py-2">
             <Button 
               variant="outline" 
-              className="h-auto flex flex-col items-start p-4 border-emerald-200 hover:bg-emerald-50 hover:border-emerald-500 transition-all text-left"
+              className="h-auto flex flex-col items-start p-4 border-emerald-200 hover:bg-emerald-50 hover:border-emerald-500 transition-all text-left" 
               onClick={() => handleInitiateDischarge('cured')}
             >
               <span className="font-bold text-emerald-800 text-lg">Cured</span>
@@ -1210,7 +1564,7 @@ export default function PatientDetail() {
             </Button>
             <Button 
               variant="outline" 
-              className="h-auto flex flex-col items-start p-4 border-blue-200 hover:bg-blue-50 hover:border-blue-500 transition-all text-left"
+              className="h-auto flex flex-col items-start p-4 border-blue-200 hover:bg-blue-50 hover:border-blue-500 transition-all text-left" 
               onClick={() => handleInitiateDischarge('treatment_completed')}
             >
               <span className="font-bold text-blue-800 text-lg">Treatment Completed</span>
@@ -1240,15 +1594,15 @@ export default function PatientDetail() {
           <DialogFooter className="mt-6 flex gap-2 sm:justify-center w-full">
             <Button 
               variant="outline" 
-              className="flex-1 rounded-xl border-slate-200 font-semibold"
-              onClick={() => setConfirmSafetyModalOpen(false)}
+              className="flex-1 rounded-xl border-slate-200 font-semibold" 
+              onClick={() => setConfirmSafetyModalOpen(false)} 
               disabled={discharging}
             >
               Cancel
             </Button>
             <Button 
-              className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
-              onClick={confirmDischarge}
+              className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold" 
+              onClick={confirmDischarge} 
               disabled={discharging}
             >
               {discharging ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
@@ -1258,34 +1612,33 @@ export default function PatientDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* Purge Record Warning Dialog */}
-      <Dialog open={purgeModalOpen} onOpenChange={setPurgeModalOpen}>
+      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
         <DialogContent className="sm:max-w-[420px] rounded-2xl p-6 bg-white font-sans border border-red-200 shadow-xl print:hidden">
           <div className="mx-auto w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4 border border-red-200">
             <ShieldAlert className="h-6 w-6 text-red-700" />
           </div>
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-red-700 text-center">Permanent Data Purge</DialogTitle>
+            <DialogTitle className="text-lg font-bold text-red-700 text-center">Delete Patient Record</DialogTitle>
             <DialogDescription className="text-slate-600 text-sm text-center mt-2 leading-relaxed">
-              You are about to permanently wipe all medical tracking data (Vitals, Meds, Roadmaps) and unlink <strong>{patient?.full_name}</strong> from your clinic. <br/><br/><strong>This action cannot be undone.</strong>
+              You are about to permanently delete all medical tracking data (Vitals, Meds, Roadmaps) and unlink <strong>{patient?.full_name}</strong> from your clinic. <br/><br/><strong>This action cannot be undone.</strong>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-6 flex gap-2 sm:justify-center w-full">
             <Button 
               variant="outline" 
-              className="flex-1 rounded-xl border-slate-200 font-semibold"
-              onClick={() => setPurgeModalOpen(false)}
-              disabled={isPurging}
+              className="flex-1 rounded-xl border-slate-200 font-semibold" 
+              onClick={() => setDeleteModalOpen(false)} 
+              disabled={isDeleting}
             >
               Cancel
             </Button>
             <Button 
-              className="flex-1 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold"
-              onClick={confirmPurge}
-              disabled={isPurging}
+              className="flex-1 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold" 
+              onClick={confirmDelete} 
+              disabled={isDeleting}
             >
-              {isPurging ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
-              Purge Data
+              {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Delete Record
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1300,6 +1653,37 @@ export default function PatientDetail() {
           </Button>
 
           <div className="flex items-center gap-2">
+            <Button 
+              onClick={() => window.print()} 
+              variant="outline" 
+              className="border-slate-300 text-slate-700 hover:bg-slate-100 rounded-xl gap-2 font-bold shadow-sm px-4"
+            >
+              <Printer className="h-4 w-4 text-slate-600" />
+              <span className="hidden sm:inline">{t("printReport")}</span>
+            </Button>
+
+            {isCured && (
+              <>
+                <Button 
+                  onClick={() => setRelapseModalOpen(true)} 
+                  variant="outline"
+                  className="border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-xl gap-2 font-bold shadow-sm px-4"
+                >
+                  <RefreshCw className="h-4 w-4 text-amber-700" />
+                  <span className="hidden sm:inline">Re-admit as Relapse</span>
+                </Button>
+
+                <Button 
+                  onClick={() => setRestoreModalOpen(true)} 
+                  variant="outline"
+                  className="border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100 rounded-xl gap-2 font-bold shadow-sm px-4"
+                >
+                  <Undo2 className="h-4 w-4 text-blue-700" />
+                  <span className="hidden sm:inline">Restore to Active</span>
+                </Button>
+              </>
+            )}
+
             {!isCured && (
               <Button 
                 onClick={() => setDischargeModalOpen(true)} 
@@ -1311,8 +1695,8 @@ export default function PatientDetail() {
             )}
             
             <Button 
-              variant="outline"
-              onClick={() => setPurgeModalOpen(true)} 
+              variant="outline" 
+              onClick={() => setDeleteModalOpen(true)} 
               className="border-red-200 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white rounded-xl gap-2 font-bold shadow-sm px-4 transition-colors"
             >
               <Trash2 className="h-4 w-4" />
@@ -1320,6 +1704,29 @@ export default function PatientDetail() {
             </Button>
           </div>
         </div>
+
+        {/* --- DOH POST-TREATMENT SURVEILLANCE BANNER --- */}
+        {isCured && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 shadow-sm flex items-start gap-4">
+            <div className="bg-emerald-100 p-2 rounded-full mt-0.5 shrink-0">
+              <CheckCircle2 className="h-5 w-5 text-emerald-700" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-emerald-950 font-bold text-lg mb-1">DOH Post-Treatment Surveillance Active</h3>
+              <p className="text-emerald-800 text-sm mb-3">
+                This patient has concluded active treatment and is now registered in the 12-Month Post-Care Surveillance cycle. Routine daily medications are stopped, and periodic surveillance follow-ups are monitored below.
+              </p>
+              <div className="flex flex-wrap gap-2 text-xs font-bold text-emerald-900">
+                <span className="bg-white px-3 py-1.5 rounded-lg border border-emerald-200 shadow-2xs">
+                  • 6-Month Chest X-Ray: {sixMonthApptDate ? new Date(sixMonthApptDate).toLocaleDateString() : "Pending"}
+                </span>
+                <span className="bg-white px-3 py-1.5 rounded-lg border border-emerald-200 shadow-2xs">
+                  • 1-Year Final Medical Clearance: {oneYearApptDate ? new Date(oneYearApptDate).toLocaleDateString() : "Pending"}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* --- SMART CLINICAL SETUP WIZARD --- */}
         {!isCured && (!startDate || meds.length === 0) && (
@@ -1329,27 +1736,34 @@ export default function PatientDetail() {
             </div>
             <div className="flex-1">
               <h3 className="text-blue-900 font-bold text-lg mb-1">Clinical Setup Required</h3>
-              <p className="text-blue-800 text-sm mb-4">This patient's medical tracking is incomplete. Please finish the clinical setup to begin monitoring their adherence.</p>
+              <p className="text-blue-800 text-sm mb-4">
+                {!startDate 
+                  ? "TB Treatment Protocol has not been generated. Please configure the roadmap start date first." 
+                  : "Roadmap protocol successfully generated. Please add active prescriptions to complete setup."}
+              </p>
               
               <div className="flex flex-col sm:flex-row gap-3">
-                <Button 
-                  onClick={() => setActiveTab('roadmap')} 
-                  variant="outline"
-                  className={`rounded-xl h-10 font-bold border-blue-300 hover:bg-blue-100 ${!startDate ? 'bg-white text-blue-700 shadow-sm border-blue-400' : 'bg-blue-50/50 text-blue-500 opacity-60'}`}
-                >
-                  {!startDate ? <div className="h-2 w-2 rounded-full bg-blue-500 mr-2 animate-pulse"/> : <CheckCircle2 className="h-4 w-4 mr-2"/>}
-                  Step 1: Set TB Roadmap
-                </Button>
+                {!startDate && (
+                  <Button 
+                    onClick={() => setActiveTab('roadmap')} 
+                    variant="outline" 
+                    className="rounded-xl h-10 font-bold border-blue-400 bg-white text-blue-700 shadow-sm hover:bg-blue-100"
+                  >
+                    <div className="h-2 w-2 rounded-full bg-blue-500 mr-2 animate-pulse"/>
+                    Step 1: Set TB Roadmap
+                  </Button>
+                )}
                 
-                <Button 
-                  onClick={() => setActiveTab('clinical')} 
-                  variant="outline"
-                  disabled={!startDate}
-                  className={`rounded-xl h-10 font-bold border-blue-300 hover:bg-blue-100 ${startDate && meds.length === 0 ? 'bg-white text-blue-700 shadow-sm border-blue-400' : 'bg-blue-50/50 text-blue-500 opacity-60'}`}
-                >
-                  {startDate && meds.length === 0 ? <div className="h-2 w-2 rounded-full bg-blue-500 mr-2 animate-pulse"/> : <CheckCircle2 className="h-4 w-4 mr-2"/>}
-                  Step 2: Add Prescriptions
-                </Button>
+                {startDate && meds.length === 0 && (
+                  <Button 
+                    onClick={() => setActiveTab('clinical')} 
+                    variant="outline" 
+                    className="rounded-xl h-10 font-bold border-blue-400 bg-white text-blue-700 shadow-sm hover:bg-blue-100"
+                  >
+                    <div className="h-2 w-2 rounded-full bg-blue-500 mr-2 animate-pulse"/>
+                    Step 2: Add Prescriptions
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -1386,7 +1800,6 @@ export default function PatientDetail() {
                         {isCured ? "Cleared" : patient.risk_level} 
                       </Badge>
                     )}
-                    {/* --- SPUTUM CONVERSION BADGE --- */}
                     {isSputumConverted && (
                       <Badge className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold tracking-wide uppercase px-2 py-1 border-none shadow-sm">
                         <CheckCircle2 className="w-3 h-3 mr-1" /> Sputum Converted
@@ -1401,10 +1814,10 @@ export default function PatientDetail() {
                   </div>
 
                   <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-1 pt-1 text-slate-600 font-medium text-sm">
-                    {patient?.phone_number && (
-                      <span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 text-slate-400" /> {patient.phone_number}</span>
+                    {patient?.contact_number && (
+                      <span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 text-slate-400" /> {patient.contact_number}</span>
                     )}
-                    {patient?.phone_number && patient?.email && <span className="text-slate-300 hidden sm:inline">•</span>}
+                    {patient?.contact_number && patient?.email && <span className="text-slate-300 hidden sm:inline">•</span>}
                     {patient?.email && (
                       <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-slate-400" /> {patient.email}</span>
                     )}
@@ -1457,8 +1870,6 @@ export default function PatientDetail() {
         {/* --- TAB CONTENT: OVERVIEW --- */}
         {activeTab === 'overview' && (
           <div className="grid gap-6 lg:grid-cols-3 animate-fade-in">
-            
-            {/* Left Column - Doctor Notes */}
             <div className="space-y-6 lg:col-span-1">
               <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
                 <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between space-y-0">
@@ -1506,7 +1917,6 @@ export default function PatientDetail() {
               </Card>
             </div>
 
-            {/* Right Column - Dedicated Weight Tracker with Chart */}
             <div className="space-y-6 lg:col-span-2">
               <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
                 <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between space-y-0 bg-[#F4F7F4]/50 rounded-t-2xl">
@@ -1522,17 +1932,15 @@ export default function PatientDetail() {
                 <CardContent className="pt-6 flex flex-col space-y-6">
                   
                   <div className="flex flex-col md:flex-row gap-6">
-                    {/* Current Weight Block */}
                     <div className="md:w-1/3 flex flex-col justify-center items-center bg-slate-50 p-6 rounded-2xl border border-slate-100 text-center">
                       <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">Most Recent Weight</p>
                       <p className="text-5xl font-extrabold text-[#283618]">{currentWeight || "--"} <span className="text-xl text-slate-500 font-bold">kg</span></p>
                     </div>
 
-                    {/* --- WEIGHT TREND CHART --- */}
                     <div className="md:w-2/3 h-[180px] w-full border border-slate-100 rounded-2xl p-4 bg-white shadow-sm">
                       {vitalsHistory.length < 2 ? (
                          <div className="h-full flex items-center justify-center text-sm text-slate-400 italic">
-                           Log at least 2 weight records to view trend chart.
+                            Log at least 2 weight records to view trend chart.
                          </div>
                       ) : (
                         <ResponsiveContainer width="100%" height="100%">
@@ -1551,7 +1959,6 @@ export default function PatientDetail() {
                     </div>
                   </div>
 
-                  {/* Vitals History Editable Table */}
                   <div className="flex-1 border-t border-slate-100 pt-4">
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Historical Logs</p>
                     {vitalsHistory.length === 0 ? (
@@ -1627,7 +2034,6 @@ export default function PatientDetail() {
         {activeTab === 'clinical' && (
           <div className="grid gap-6 lg:grid-cols-3 animate-fade-in">
             <div className="space-y-6 lg:col-span-1">
-              
               <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white flex flex-col h-full">
                 <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between space-y-0">
                   <CardTitle className="text-md font-bold flex items-center gap-2 text-[#283618]">
@@ -1640,7 +2046,36 @@ export default function PatientDetail() {
                   )}
                 </CardHeader>
                 <CardContent className="flex-1 p-4 max-h-[500px] overflow-y-auto">
-                  {/* --- ACTIVE MEDS --- */}
+                  
+                  {/* --- ITEM 2: VISUAL DOSAGE TABLET PREVIEW --- */}
+                  <div className="mb-6 p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                    <div className="flex items-start gap-3">
+                      <Info className="h-5 w-5 text-emerald-600 mt-0.5 shrink-0" />
+                      <div className="flex-1">
+                        <h4 className="text-sm font-bold text-emerald-900 mb-1">DOH NTP Dosage Calibration</h4>
+                        {vitalsHistory.length > 0 ? (
+                          <div>
+                            <p className="text-xs text-emerald-800 mb-2">
+                              Calibrated based on latest weight: <strong>{vitalsHistory[0].weight_kg} kg</strong> ({vitalsHistory[0].weight_kg >= 55 ? "Band 55–70kg" : (vitalsHistory[0].weight_kg >= 38 ? "Band 38–54kg" : "Band 30–37kg")})
+                            </p>
+                            <div className="flex items-center gap-2 mb-2 flex-wrap">
+                              {recommendedTabletCount > 0 && Array.from({ length: recommendedTabletCount }).map((_, i) => (
+                                <span key={i} className="inline-flex items-center gap-1 text-[11px] font-bold bg-white text-emerald-900 border border-emerald-200 px-2.5 py-1 rounded-lg shadow-2xs">
+                                  <Pill className="w-3.5 h-3.5 text-emerald-600" /> Tab {i + 1}
+                                </span>
+                              ))}
+                            </div>
+                            <span className="font-bold text-sm text-emerald-950 block">
+                              {calculateDosage(vitalsHistory[0].weight_kg, isSputumConverted || phase === t("continuationPhase"))}
+                            </span>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-emerald-700">Please log patient weight in the Overview tab to calculate recommended daily tablets.</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="mb-4">
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Active & Upcoming</p>
                     <div className="space-y-3">
@@ -1671,7 +2106,6 @@ export default function PatientDetail() {
                     </div>
                   </div>
 
-                  {/* --- COMPLETED MEDS --- */}
                   {pastMeds.length > 0 && (
                     <div className="mt-6 pt-4 border-t border-slate-100">
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Completed / Past</p>
@@ -1703,7 +2137,6 @@ export default function PatientDetail() {
                     <CardTitle className="text-md font-bold flex items-center gap-2 text-[#283618]">
                       <ClipboardList className="h-5 w-5 text-[#606C38]" /> DOH TB Form 4 Classifications
                     </CardTitle>
-                    {/* --- LAST SYNCED INDICATOR --- */}
                     {dohLastSynced && (
                       <div className="hidden sm:flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">
                         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -1717,9 +2150,9 @@ export default function PatientDetail() {
                     <div className="space-y-2">
                       <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Registration Group</Label>
                       <select 
-                        className="w-full bg-slate-50 border border-slate-200 text-sm font-medium text-slate-700 rounded-xl h-11 px-3 focus:outline-none focus:ring-2 focus:ring-[#606C38]"
-                        value={registrationGroup}
-                        onChange={(e) => setRegistrationGroup(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 text-sm font-medium text-slate-700 rounded-xl h-11 px-3 focus:outline-none focus:ring-2 focus:ring-[#606C38]" 
+                        value={registrationGroup} 
+                        onChange={(e) => setRegistrationGroup(e.target.value)} 
                         disabled={isCured}
                       >
                         <option value="">Select Group...</option>
@@ -1734,9 +2167,9 @@ export default function PatientDetail() {
                     <div className="space-y-2">
                       <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Disease Anatomical Site</Label>
                       <select 
-                        className="w-full bg-slate-50 border border-slate-200 text-sm font-medium text-slate-700 rounded-xl h-11 px-3 focus:outline-none focus:ring-2 focus:ring-[#606C38]"
-                        value={anatomicalSite}
-                        onChange={(e) => setAnatomicalSite(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 text-sm font-medium text-slate-700 rounded-xl h-11 px-3 focus:outline-none focus:ring-2 focus:ring-[#606C38]" 
+                        value={anatomicalSite} 
+                        onChange={(e) => setAnatomicalSite(e.target.value)} 
                         disabled={isCured}
                       >
                         <option value="">Select Site...</option>
@@ -1746,29 +2179,41 @@ export default function PatientDetail() {
                     </div>
                   </div>
 
+                  {/* --- ITEM 3: DYNAMIC COLOR-CODED BACTERIOLOGICAL TRAJECTORY --- */}
                   <div className="pt-2">
-                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">DSSM Sputum Monitoring (Results)</Label>
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                        DSSM Sputum Smear Progression (Bacteriological Tracking)
+                      </Label>
+                      {isSputumConverted && (
+                        <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" /> Sputum Conversion Verified
+                        </span>
+                      )}
+                    </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
                       {['month0', 'month2', 'month3', 'month4', 'month5', 'month6'].map((monthKey) => {
                         const monthLabel = monthKey === 'month0' ? 'Month 0' : `Month ${monthKey.replace('month', '')}`;
+                        const val = (dssmResults as any)[monthKey] || "";
+
                         return (
-                          <div key={monthKey} className="flex flex-col gap-1 border border-slate-100 bg-slate-50 rounded-lg p-2 text-center">
-                            <span className="text-[10px] font-bold text-slate-500">{monthLabel}</span>
+                          <div key={monthKey} className={`flex flex-col gap-1 border rounded-lg p-2 text-center transition-colors ${getDssmBadgeStyle(val)}`}>
+                            <span className="text-[10px] font-bold opacity-75">{monthLabel}</span>
                             <select 
-                              className="w-full bg-white border border-slate-200 text-xs font-medium text-slate-700 rounded h-8 px-1 focus:outline-none focus:border-[#606C38]"
-                              value={(dssmResults as any)[monthKey] || ""}
-                              onChange={(e) => handleDssmChange(monthKey, e.target.value)}
+                              className="w-full bg-transparent border-0 text-xs font-bold text-inherit rounded h-8 px-1 focus:outline-none text-center cursor-pointer" 
+                              value={val} 
+                              onChange={(e) => handleDssmChange(monthKey, e.target.value)} 
                               disabled={isCured}
                             >
-                              <option value="">-</option>
-                              <option value="Negative">0 (Neg)</option>
-                              <option value="1+">+</option>
-                              <option value="2+">++</option>
-                              <option value="3+">+++</option>
-                              <option value="Not Done">N/D</option>
+                              <option value="" className="text-black">-</option>
+                              <option value="Negative" className="text-emerald-800">0 (Neg)</option>
+                              <option value="1+" className="text-rose-800">1+ (Pos)</option>
+                              <option value="2+" className="text-rose-800">2+ (Pos)</option>
+                              <option value="3+" className="text-rose-800">3+ (Pos)</option>
+                              <option value="Not Done" className="text-slate-600">N/D</option>
                             </select>
                           </div>
-                        )
+                        );
                       })}
                     </div>
                   </div>
@@ -1796,9 +2241,9 @@ export default function PatientDetail() {
                       <div className="px-2 border-r border-slate-200 bg-slate-100 flex items-center justify-center h-8">
                         <Calendar className="h-3.5 w-3.5 text-slate-500" />
                       </div>
-                      <select
-                        value={dateRangeFilter}
-                        onChange={(e) => { setDateRangeFilter(e.target.value as any); setLogPage(0); }}
+                      <select 
+                        value={dateRangeFilter} 
+                        onChange={(e) => { setDateRangeFilter(e.target.value as any); setLogPage(0); }} 
                         className="bg-transparent text-xs font-bold text-slate-700 h-8 px-2 focus:outline-none cursor-pointer"
                       >
                         <option value="all">All Dates</option>
@@ -1812,9 +2257,9 @@ export default function PatientDetail() {
                       <div className="px-2 border-r border-slate-200 bg-slate-100 flex items-center justify-center h-8">
                         <Filter className="h-3.5 w-3.5 text-slate-500" />
                       </div>
-                      <select
-                        value={logFilter}
-                        onChange={(e) => { setLogFilter(e.target.value as any); setLogPage(0); }}
+                      <select 
+                        value={logFilter} 
+                        onChange={(e) => { setLogFilter(e.target.value as any); setLogPage(0); }} 
                         className="bg-transparent text-xs font-bold text-slate-700 h-8 px-2 focus:outline-none cursor-pointer"
                       >
                         <option value="all">All Statuses</option>
@@ -1880,20 +2325,20 @@ export default function PatientDetail() {
                       Showing {historicalLogs.length > 0 ? (logPage * LOGS_PER_PAGE) + 1 : 0} - {Math.min((logPage * LOGS_PER_PAGE) + LOGS_PER_PAGE, totalLogCount)} of {totalLogCount} records
                     </span>
                     <div className="flex gap-1.5">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 rounded-lg border-slate-200"
-                        disabled={logPage === 0}
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        className="h-8 w-8 rounded-lg border-slate-200" 
+                        disabled={logPage === 0} 
                         onClick={() => setLogPage(prev => Math.max(0, prev - 1))}
                       >
                         <ChevronLeft className="h-4 w-4" />
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 rounded-lg border-slate-200"
-                        disabled={(logPage + 1) * LOGS_PER_PAGE >= totalLogCount}
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        className="h-8 w-8 rounded-lg border-slate-200" 
+                        disabled={(logPage + 1) * LOGS_PER_PAGE >= totalLogCount} 
                         onClick={() => setLogPage(prev => prev + 1)}
                       >
                         <ChevronRight className="h-4 w-4" />
@@ -1902,170 +2347,248 @@ export default function PatientDetail() {
                   </div>
                 </CardContent>
               </Card>
-
-              {startDate && endDate && (
-                <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white mt-6">
-                  <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between space-y-0">
-                    <CardTitle className="flex items-center gap-2 text-md text-[#283618] font-bold">
-                      <Pill className="h-5 w-5 text-[#606C38]" /> Today's Medication Status
-                    </CardTitle>
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">
-                      {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                    </span>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    {activeMeds.length === 0 ? (
-                      <p className="text-sm text-slate-500 italic text-center py-4">No medications scheduled for today.</p>
-                    ) : (
-                      <div className="space-y-3">
-                        {activeMeds.map(med => {
-                          const log = todayLogs.find(l => l.medication_id.toString() === med.id.toString());
-                          return (
-                            <div key={med.id} className="flex justify-between items-center p-3 border border-slate-100 rounded-xl bg-slate-50">
-                              <div>
-                                <p className="text-sm font-bold text-slate-800">{med.name} <span className="text-slate-500 font-medium">({med.dosage})</span></p>
-                                <p className="text-xs text-slate-500 mt-0.5 font-medium">Target: {med.time}</p>
-                              </div>
-                              <div className="text-right flex flex-col items-end justify-center">
-                                {log && log.status === 'taken' ? (
-                                  <>
-                                    <Badge className="bg-emerald-100 text-emerald-800 border-none uppercase text-[10px] font-bold tracking-wider px-2 py-0.5 mb-1 flex items-center justify-center">
-                                      <CheckCircle2 className="w-3 h-3 mr-1 inline" /> {t("taken")}
-                                    </Badge>
-                                    <span className={`text-[10px] font-bold uppercase tracking-wider block mb-0.5 ${log.timing_status === 'on-time' ? 'text-emerald-600' : (log.timing_status === 'early' ? 'text-blue-600' : 'text-amber-600')}`}>
-                                      {log.timing_status === 'on-time' ? '🎯 On Time' : log.timing_status}
-                                    </span>
-                                    <span className="text-[10px] text-slate-400 font-medium block">at {formatTimeStr(log.time_taken)}</span>
-                                  </>
-                                ) : (
-                                  <Badge className="bg-amber-100 text-amber-800 border-none uppercase text-[10px] font-bold tracking-wider px-2 py-0.5 flex items-center justify-center">
-                                    <Activity className="w-3 h-3 mr-1 inline" /> Pending
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
             </div>
           </div>
         )}
 
         {/* --- TAB CONTENT: ROADMAP & PROTOCOLS --- */}
         {activeTab === 'roadmap' && (
-          <div className="grid gap-6 lg:grid-cols-3 animate-fade-in">
-            <div className="space-y-6 lg:col-span-1">
-              <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
-                <CardHeader className="pb-3 border-b border-slate-100">
-                  <CardTitle className="flex items-center gap-2 text-lg text-[#283618] font-bold">
-                    <Activity className="h-5 w-5 text-[#606C38]" /> {t("roadmapConfig")}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-5 space-y-5">
-                  {!isCured ? (
-                    <>
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <Label className="text-black font-bold">{t("selectRegimen")}</Label>
-                          <select 
-                            className="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl h-11 px-3 focus:outline-none focus:ring-2 focus:ring-[#606C38] focus:border-transparent transition-all"
-                            value={tbRegimen}
-                            onChange={(e) => setTbRegimen(e.target.value)}
-                          >
-                            <option value="6-Month DOTS">{t("sixMonthDots")}</option>
-                            <option value="Shortened 4-Month Regimen (BPaL/BPaLM)">{t("fourMonthRegimen")}</option>
-                          </select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-black font-bold">{t("startDate")}</Label>
-                          <Input type="date" className="bg-slate-50 border-slate-200 rounded-xl h-11 focus-visible:ring-[#606C38]" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-slate-500 font-bold">{t("endDate")}</Label>
-                          <Input type="date" className="bg-slate-100 text-slate-500 font-semibold border-slate-200 rounded-xl h-11" value={endDate} readOnly disabled />
-                        </div>
-                      </div>
-                      
-                      <div className="pt-4 space-y-3 border-t border-slate-100">
-                        <Button onClick={handleGenerateProtocol} className="w-full bg-[#606C38] hover:bg-[#283618] text-white rounded-xl h-11 font-semibold shadow-sm transition-all" disabled={generating || !startDate}>
-                          {generating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Wand2 className="h-4 w-4 mr-2" />}
-                          {t("autoGen")}
-                        </Button>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="py-6 text-center">
-                      <FileCheck2 className="h-10 w-10 text-emerald-300 mx-auto mb-3" />
-                      <p className="text-emerald-800 font-bold">Treatment Finalized</p>
-                      <p className="text-xs text-slate-500 mt-1">Roadmap configuration is locked for discharged patients.</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="space-y-6 lg:col-span-2">
-              <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white flex flex-col h-full">
-                <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between space-y-0">
-                  <CardTitle className="text-md font-bold flex items-center gap-2 text-[#283618]">
-                    <CalendarDays className="h-5 w-5 text-[#606C38]" /> {t("milestones")}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="flex-1 p-0 overflow-hidden">
-                  <div className="max-h-[500px] overflow-y-auto">
-                    <Table>
-                      <TableBody>
-                        {appointments.length === 0 ? (
-                          <TableRow>
-                            <TableCell className="text-center italic py-10 text-slate-400">{t("noMilestones")}</TableCell>
-                          </TableRow>
-                        ) : appointments.filter(a => a.status !== 'completed').map((appt) => (
-                          <TableRow key={appt.id} className="hover:bg-slate-50 border-b border-slate-100">
-                            <TableCell className="py-5 px-6">
-                              <p className="text-sm font-bold text-black mb-1">
-                                {appt.title || 'Follow-up'}
-                              </p>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <p className="text-[12px] font-medium text-slate-500">
-                                  {new Date(appt.appointment_date).toLocaleDateString()} • {appt.location}
-                                </p>
-                                {appt.type === 'protocol' && (
-                                  <Badge variant="outline" className="text-[10px] h-5 px-2 border-[#DDE5B6] bg-[#FEFAE0] text-[#606C38]">
-                                    {t("dohProtocol")}
-                                  </Badge>
-                                )}
-                                {appt.type === 'post-treatment' && (
-                                  <Badge variant="outline" className="text-[10px] h-5 px-2 border-emerald-200 bg-emerald-50 text-emerald-700">
-                                    Post-Treatment
-                                  </Badge>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right py-5 px-6">
-                              <Button size="sm" variant="outline" className="border-[#606C38] text-[#606C38] hover:bg-[#606C38] hover:text-white rounded-lg transition-colors" onClick={() => handleCompleteAppointment(appt.id)}>
-                                <CheckCircle2 className="h-4 w-4 mr-2" /> Complete
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+          <div className="space-y-6 animate-fade-in">
+            
+            {/* --- ITEM 1: HORIZONTAL DOH NTP CLINICAL PROGRESSION STEPPER --- */}
+            {startDate && (
+              <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white p-6">
+                <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">DOH NTP Clinical Treatment Trajectory</h3>
+                    <p className="text-xs text-slate-500">Standard 6-Month Therapeutic Milestones & Evaluative Gateways</p>
                   </div>
-                </CardContent>
+                  <Badge variant="outline" className="font-mono text-xs text-[#606C38] border-[#DDE5B6] bg-[#FEFAE0]">
+                    Day {Math.max(elapsedDays, 0)} of 180
+                  </Badge>
+                </div>
+
+                <div className="relative flex items-center justify-between px-4 py-2">
+                  <div className="absolute top-1/2 left-8 right-8 h-1 bg-slate-100 -translate-y-1/2 z-0" />
+                  <div 
+                    className="absolute top-1/2 left-8 h-1 bg-[#606C38] -translate-y-1/2 z-0 transition-all duration-500"
+                    style={{ width: `${Math.min(Math.max((elapsedDays / 180) * 100, 0), 100)}%` }}
+                  />
+
+                  {[
+                    { label: "Day 1: Initiation", sub: "Baseline Check", day: 0 },
+                    { label: "Mo 2: Conversion", sub: "Intensive Sputum", day: 60 },
+                    { label: "Mo 5: Mid-Check", sub: "Continuation Follow-up", day: 150 },
+                    { label: "Mo 6: Cure", sub: "Final Assessment", day: 180 },
+                  ].map((step, idx) => {
+                    const isDone = elapsedDays >= step.day || isCured;
+                    const isCurrent = !isCured && elapsedDays < step.day && (idx === 0 || elapsedDays >= [0, 60, 150, 180][idx - 1]);
+
+                    return (
+                      <div key={idx} className="relative z-10 flex flex-col items-center text-center">
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all ${
+                          isDone 
+                            ? 'bg-[#606C38] border-[#606C38] text-white shadow-sm' 
+                            : (isCurrent ? 'bg-white border-[#606C38] text-[#606C38] ring-4 ring-[#FEFAE0]' : 'bg-white border-slate-300 text-slate-400')
+                        }`}>
+                          {isDone ? <Check className="w-4 h-4 stroke-[3]" /> : <span className="text-xs font-bold">{idx + 1}</span>}
+                        </div>
+                        <span className="text-xs font-bold text-slate-800 mt-2">{step.label}</span>
+                        <span className="text-[10px] text-slate-400">{step.sub}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </Card>
+            )}
+
+            <div className="grid gap-6 lg:grid-cols-3">
+              <div className="space-y-6 lg:col-span-1">
+                <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
+                  <CardHeader className="pb-3 border-b border-slate-100">
+                    <CardTitle className="flex items-center gap-2 text-lg text-[#283618] font-bold">
+                      <Activity className="h-5 w-5 text-[#606C38]" /> {t("roadmapConfig")}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-5 space-y-5">
+                    {!isCured ? (
+                      <>
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label className="text-black font-bold">{t("selectRegimen")}</Label>
+                            <select 
+                              className="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl h-11 px-3 focus:outline-none focus:ring-2 focus:ring-[#606C38] focus:border-transparent transition-all" 
+                              value={tbRegimen} 
+                              onChange={(e) => setTbRegimen(e.target.value)}
+                            >
+                              <option value="6-Month DOTS">{t("sixMonthDots")}</option>
+                              <option value="Shortened 4-Month Regimen (BPaL/BPaLM)">{t("fourMonthRegimen")}</option>
+                            </select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-black font-bold">{t("startDate")}</Label>
+                            <Input type="date" className="bg-slate-50 border-slate-200 rounded-xl h-11 focus-visible:ring-[#606C38]" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-slate-500 font-bold">{t("endDate")}</Label>
+                            <Input type="date" className="bg-slate-100 text-slate-500 font-semibold border-slate-200 rounded-xl h-11" value={endDate} readOnly disabled />
+                          </div>
+                        </div>
+                        
+                        <div className="pt-4 space-y-3 border-t border-slate-100">
+                          <Button onClick={handleGenerateProtocol} className="w-full bg-[#606C38] hover:bg-[#283618] text-white rounded-xl h-11 font-semibold shadow-sm transition-all" disabled={generating || !startDate}>
+                            {generating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Wand2 className="h-4 w-4 mr-2" />}
+                            {t("autoGen")}
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="py-6 text-center">
+                        <FileCheck2 className="h-10 w-10 text-emerald-300 mx-auto mb-3" />
+                        <p className="text-emerald-800 font-bold">Treatment Finalized</p>
+                        <p className="text-xs text-slate-500 mt-1">Roadmap configuration is locked for discharged patients under surveillance.</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="space-y-6 lg:col-span-2">
+                <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
+                  <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between space-y-0">
+                    <CardTitle className="text-md font-bold flex items-center gap-2 text-[#283618]">
+                      <CalendarDays className="h-5 w-5 text-[#606C38]" /> Active & Scheduled Milestones
+                    </CardTitle>
+                    {!isCured && (
+                      <Button 
+                        size="sm" 
+                        onClick={() => handleOpenMilestoneModal()} 
+                        className="bg-[#606C38] hover:bg-[#283618] text-white rounded-lg h-8 px-3"
+                      >
+                        <CalendarPlus className="h-3.5 w-3.5 mr-1.5" /> Add Milestone
+                      </Button>
+                    )}
+                  </CardHeader>
+                  <CardContent className="p-0 overflow-hidden">
+                    <div className="max-h-[300px] overflow-y-auto">
+                      <Table>
+                        <TableBody>
+                          {appointments.filter(a => a.status !== 'completed').length === 0 ? (
+                            <TableRow>
+                              <TableCell className="text-center italic py-8 text-slate-400">No pending milestones scheduled.</TableCell>
+                            </TableRow>
+                          ) : appointments.filter(a => a.status !== 'completed').map((appt) => (
+                            <TableRow key={appt.id} className="hover:bg-slate-50 border-b border-slate-100">
+                              <TableCell className="py-4 px-6">
+                                <p className="text-sm font-bold text-black mb-1">{appt.title || 'Follow-up'}</p>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="text-[12px] font-medium text-slate-500">
+                                    {new Date(appt.appointment_date).toLocaleDateString()} • {appt.location}
+                                  </p>
+                                  {appt.type === 'protocol' && (
+                                    <Badge variant="outline" className="text-[10px] h-5 px-2 border-[#DDE5B6] bg-[#FEFAE0] text-[#606C38]">
+                                      {t("dohProtocol")}
+                                    </Badge>
+                                  )}
+                                  {appt.type === 'post-treatment' && (
+                                    <Badge variant="outline" className="text-[10px] h-5 px-2 border-emerald-200 bg-emerald-50 text-emerald-700">
+                                      Post-Treatment
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right py-4 px-6">
+                                <div className="flex justify-end items-center gap-1.5">
+                                  {!isCured && (
+                                    <>
+                                      <Button 
+                                        size="icon" 
+                                        variant="ghost" 
+                                        className="h-8 w-8 text-blue-500 hover:bg-blue-50" 
+                                        onClick={() => handleOpenMilestoneModal(appt)}
+                                      >
+                                        <Edit className="h-4 w-4" />
+                                      </Button>
+                                      <Button 
+                                        size="icon" 
+                                        variant="ghost" 
+                                        className="h-8 w-8 text-red-400 hover:bg-red-50" 
+                                        onClick={() => handleDeleteMilestone(appt.id)}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </>
+                                  )}
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    className="border-[#606C38] text-[#606C38] hover:bg-[#606C38] hover:text-white rounded-lg transition-colors ml-1" 
+                                    onClick={() => handleCompleteAppointment(appt.id)}
+                                  >
+                                    <CheckCircle2 className="h-4 w-4 mr-2" /> Complete
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
+                  <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between space-y-0 bg-[#F4F7F4]/40 rounded-t-2xl">
+                    <CardTitle className="text-md font-bold flex items-center gap-2 text-[#283618]">
+                      <CheckCircle2 className="h-5 w-5 text-emerald-600" /> Milestone Completion History
+                    </CardTitle>
+                    <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border-none font-bold text-xs">
+                      {appointments.filter(a => a.status === 'completed').length} Completed
+                    </Badge>
+                  </CardHeader>
+                  <CardContent className="p-0 overflow-hidden">
+                    <div className="max-h-[300px] overflow-y-auto">
+                      <Table>
+                        <TableBody>
+                          {appointments.filter(a => a.status === 'completed').length === 0 ? (
+                            <TableRow>
+                              <TableCell className="text-center italic py-8 text-slate-400">
+                                No completed milestones recorded yet. Completed appointments will be archived here.
+                              </TableCell>
+                            </TableRow>
+                          ) : appointments.filter(a => a.status === 'completed').map((appt) => (
+                            <TableRow key={appt.id} className="hover:bg-slate-50/50 border-b border-slate-100">
+                              <TableCell className="py-4 px-6">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <p className="text-sm font-bold text-slate-800 line-through decoration-slate-400">{appt.title}</p>
+                                  <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                                    Done
+                                  </Badge>
+                                </div>
+                                <p className="text-[12px] font-medium text-slate-400">
+                                  Completed for scheduled date: {new Date(appt.appointment_date).toLocaleDateString()} • {appt.location}
+                                </p>
+                              </TableCell>
+                              <TableCell className="text-right py-4 px-6">
+                                <span className="text-xs text-emerald-700 font-bold flex items-center justify-end gap-1">
+                                  <Check className="h-4 w-4" /> Verified by Clinic
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* --- HIDDEN E-DISCHARGE CERTIFICATE (VISIBLE ONLY WHEN PRINTING) --- */}
+      {/* --- PRINTABLE OFFICIAL DOH E-DISCHARGE & MEDICAL CLEARANCE CERTIFICATE --- */}
       <div className="hidden print:block font-sans text-black bg-white min-h-screen w-full certificate-container">
-        
-        {/* ENFORCED PRINT STYLES - Hides the entire DashboardLayout structure */}
         <style type="text/css" media="print">
           {`
             @page { size: auto; margin: 0mm; }
@@ -2076,9 +2599,9 @@ export default function PatientDetail() {
               left: 0 !important; 
               top: 0 !important; 
               width: 100vw !important; 
-              height: 100vh !important;
+              min-height: 100vh !important;
               margin: 0 !important;
-              padding: 2cm 2cm !important;
+              padding: 2.2cm 2.2cm !important;
               background: white !important;
               z-index: 99999 !important;
               box-sizing: border-box !important;
@@ -2086,75 +2609,162 @@ export default function PatientDetail() {
           `}
         </style>
 
-        <div className="flex items-center justify-between border-b-2 border-slate-800 pb-6 mb-8">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">MUNICIPALITY OF CARMONA</h1>
-            <h2 className="text-xl font-bold text-slate-600 mt-1">TB DOTS CLINIC</h2>
-          </div>
-          <div className="text-right">
-            <div className="flex items-center justify-end gap-3">
-              <img src="/LogoNoBG.png" alt="TEREA Logo" className="h-10 w-10 object-contain drop-shadow-sm" />
-              <h1 className="text-3xl font-extrabold tracking-tight">TEREA</h1>
-            </div>
-            <p className="text-sm font-bold text-slate-500 mt-1">E-DISCHARGE CERTIFICATE</p>
-          </div>
-        </div>
-
-        <div className="space-y-8">
-          <p className="text-lg leading-relaxed text-justify">
-            This is to certify that <strong>{patient?.full_name?.toUpperCase()}</strong>, a resident of Barangay {patient?.barangay || "Carmona"}, has completed medical review under the supervision of the Carmona Health Center.
-          </p>
-
-          <div className="grid grid-cols-2 gap-y-6 text-md bg-slate-50 p-6 rounded-lg border border-slate-200">
+        <div className="border-2 border-slate-900 p-8 rounded-2xl relative">
+          
+          {/* Header */}
+          <div className="flex items-center justify-between border-b-2 border-slate-900 pb-5 mb-6">
             <div>
-              <span className="font-bold text-slate-500 block text-xs">PATIENT ID</span>
-              <span className="font-semibold">{patient?.id?.substring(0, 8).toUpperCase()}</span>
+              <p className="text-xs tracking-widest text-slate-500 font-bold uppercase mb-0.5">Republic of the Philippines • Province of Cavite</p>
+              <h1 className="text-2xl font-extrabold tracking-tight text-slate-950">MUNICIPALITY OF CARMONA</h1>
+              <h2 className="text-base font-bold text-slate-700">CARMONA HEALTH CENTER • TB DOTS CLINIC</h2>
             </div>
-            <div>
-              <span className="font-bold text-slate-500 block text-xs">TREATMENT PROTOCOL</span>
-              <span className="font-semibold">{tbRegimen}</span>
-            </div>
-            <div>
-              <span className="font-bold text-slate-500 block text-xs">TREATMENT START</span>
-              <span className="font-semibold">{startDate ? new Date(startDate).toLocaleDateString() : "N/A"}</span>
-            </div>
-            <div>
-              <span className="font-bold text-slate-500 block text-xs">TREATMENT END</span>
-              <span className="font-semibold">{endDate ? new Date(endDate).toLocaleDateString() : "N/A"}</span>
-            </div>
-            <div>
-              <span className="font-bold text-slate-500 block text-xs">FINAL STATUS</span>
-              <span className="font-extrabold text-emerald-700 uppercase">
-                {patient?.status === 'cured' ? 'Cured' : (patient?.status === 'treatment_completed' ? 'Treatment Completed' : 'Pending')}
-              </span>
-            </div>
-            <div>
-              <span className="font-bold text-slate-500 block text-xs">ADHERENCE RATE</span>
-              <span className="font-semibold">{Math.round(aggregatedAdherenceRate)}%</span>
+            <div className="text-right flex items-center gap-3">
+              <img src="/LogoNoBG.png" alt="TEREA Logo" className="h-12 w-12 object-contain drop-shadow-sm" />
+              <div className="text-left border-l-2 border-slate-300 pl-3">
+                <h3 className="text-xl font-black tracking-tight text-[#283618]">TEREA</h3>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">NTP ITIS Registry</p>
+              </div>
             </div>
           </div>
 
-          {/* DYNAMIC MEDICAL ACCURACY TEXT BASED ON DISCHARGE STATUS */}
-          {patient?.status === 'cured' ? (
-            <p className="text-md italic text-slate-600 pt-4">
-              The patient has successfully completed the DOTS regimen and presented a negative final sputum smear. The patient is hereby declared cleared of active Tuberculosis infection and is advised to return for the scheduled 6-month and 1-year post-treatment follow-ups as registered in their digital roadmap.
+          {/* Certificate Title */}
+          <div className="text-center my-6">
+            <h2 className="text-2xl font-black tracking-wide text-slate-900 uppercase">
+              E-Discharge & Medical Clearance Certificate
+            </h2>
+            <p className="text-xs font-semibold text-slate-500 mt-1 uppercase tracking-wider">
+              National Tuberculosis Control Program (NTP) • Form 4 Master Card Clearance
             </p>
-          ) : (
-            <p className="text-md italic text-slate-600 pt-4">
-              The patient has officially completed the required treatment duration. While a final negative sputum smear is unverified, active clinical monitoring is now concluded. The patient is advised to return for their scheduled 6-month and 1-year post-treatment follow-ups.
-            </p>
-          )}
+          </div>
 
-          <div className="pt-20 flex justify-between items-end">
-            <div>
-              <p className="text-xs text-slate-400">Date Generated</p>
-              <p className="font-bold">{new Date().toLocaleDateString()}</p>
-            </div>
-            <div className="text-center w-64 border-t border-slate-800 pt-2">
-              <p className="font-bold uppercase">Attending Physician</p>
-              <p className="text-sm text-slate-500">Carmona TB DOTS Center</p>
+          {/* Patient Identity */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6">
+            <div className="grid grid-cols-2 gap-y-3 text-sm">
+              <div>
+                <span className="text-[11px] font-bold text-slate-500 uppercase block">Patient Full Name</span>
+                <span className="text-base font-bold text-slate-950">{patient?.full_name?.toUpperCase() || "N/A"}</span>
+              </div>
+              <div>
+                <span className="text-[11px] font-bold text-slate-500 uppercase block">Official Patient ID</span>
+                <span className="font-mono font-bold text-slate-900">{patient?.id?.substring(0, 8).toUpperCase() || "N/A"}</span>
+              </div>
+              <div>
+                <span className="text-[11px] font-bold text-slate-500 uppercase block">Age / Gender / Residency</span>
+                <span className="font-medium text-slate-800">{patient?.age || "N/A"} yrs old • {patient?.gender || "N/A"} • Brgy. {patient?.barangay || "Carmona"}</span>
+              </div>
+              <div>
+                <span className="text-[11px] font-bold text-slate-500 uppercase block">TB Classification & Regimen</span>
+                <span className="font-bold text-slate-800">{tbRegimen} ({registrationGroup || "New"} • {anatomicalSite || "PTB"})</span>
+              </div>
             </div>
           </div>
+
+          {/* Verdict Banner */}
+          <div className="text-center p-4 rounded-xl border border-slate-300 bg-slate-100/70 my-5">
+            <span className="text-xs font-bold uppercase tracking-widest text-slate-500 block mb-1">Clinical Outcome Classification</span>
+            <span className={`text-2xl font-black uppercase tracking-wider ${patient?.status === 'cured' ? 'text-emerald-800' : 'text-blue-800'}`}>
+              {patient?.status === 'cured' ? 'CLEARED & CURED' : 'TREATMENT COMPLETED'}
+            </span>
+            <p className="text-xs text-slate-600 mt-2 max-w-2xl mx-auto leading-relaxed">
+              {patient?.status === 'cured'
+                ? "The patient has officially completed the full anti-TB therapeutic regimen and presented bacteriological proof of cure via negative final sputum smear. The patient is declared non-infectious, cleared of active Mycobacterium tuberculosis, and discharged from daily DOTS monitoring."
+                : "The patient has successfully accomplished the mandated anti-TB chemotherapeutic course in accordance with Philippine DOH NTP standards. Active medication intake is officially completed, and post-care surveillance is enforced."}
+            </p>
+          </div>
+
+          {/* Historical Clinical Evidence: DSSM Sputum Monitoring + Weight Progression */}
+          <div className="space-y-4 my-6">
+            <h4 className="text-xs font-extrabold uppercase tracking-widest text-slate-800 border-b pb-1">
+              Clinical Evidence & Historical Progress Track Record
+            </h4>
+
+            {/* Sputum Smear Table (DSSM) */}
+            <div className="border border-slate-200 rounded-lg overflow-hidden">
+              <div className="bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700">
+                1. Bacteriological Smear Monitoring History (Direct Sputum Smear Microscopy)
+              </div>
+              <div className="grid grid-cols-6 divide-x text-center text-xs">
+                <div className="p-2.5">
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Month 0 (Base)</span>
+                  <span className="font-extrabold text-slate-800 mt-0.5 block">{dssmResults.month0 || "N/D"}</span>
+                </div>
+                <div className="p-2.5">
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Month 2 (Conv)</span>
+                  <span className={`font-extrabold mt-0.5 block ${dssmResults.month2 === 'Negative' ? 'text-emerald-700' : 'text-slate-800'}`}>
+                    {dssmResults.month2 || "N/D"}
+                  </span>
+                </div>
+                <div className="p-2.5">
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Month 3</span>
+                  <span className="font-semibold text-slate-800 mt-0.5 block">{dssmResults.month3 || "-"}</span>
+                </div>
+                <div className="p-2.5">
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Month 4</span>
+                  <span className="font-semibold text-slate-800 mt-0.5 block">{dssmResults.month4 || "-"}</span>
+                </div>
+                <div className="p-2.5">
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Month 5</span>
+                  <span className="font-bold text-slate-800 mt-0.5 block">{dssmResults.month5 || "N/D"}</span>
+                </div>
+                <div className="p-2.5 bg-emerald-50/50">
+                  <span className="text-[10px] text-emerald-800 font-bold block uppercase">Month 6 (Final)</span>
+                  <span className="font-black text-emerald-800 mt-0.5 block">{dssmResults.month6 || "Negative"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Weight Recovery & Adherence Performance */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="border border-slate-200 rounded-lg p-3 text-xs">
+                <span className="font-bold text-slate-700 block mb-1.5">2. Nutritional Recovery & Weight Progression</span>
+                <div className="flex items-center justify-between text-slate-600">
+                  <span>Initial Weight: <strong>{initialWeight ? `${initialWeight} kg` : "N/A"}</strong></span>
+                  <span>➔</span>
+                  <span>Discharge Weight: <strong>{latestWeight ? `${latestWeight} kg` : "N/A"}</strong></span>
+                </div>
+                {weightGain && (
+                  <p className="text-[11px] font-bold text-emerald-700 mt-1.5">
+                    Net Nutritional Gain: +{weightGain} kg recovery
+                  </p>
+                )}
+              </div>
+
+              <div className="border border-slate-200 rounded-lg p-3 text-xs">
+                <span className="font-bold text-slate-700 block mb-1.5">3. Treatment Adherence & Course Period</span>
+                <div className="text-slate-600 space-y-0.5">
+                  <p>Overall Adherence Rate: <strong className="text-emerald-700">{Math.round(aggregatedAdherenceRate)}% Compliance</strong></p>
+                  <p>Duration: {startDate ? new Date(startDate).toLocaleDateString() : "N/A"} to {endDate ? new Date(endDate).toLocaleDateString() : "N/A"}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Post-Care Surveillance Schedule */}
+            <div className="border border-slate-200 rounded-lg p-3 text-xs bg-slate-50">
+              <span className="font-bold text-slate-700 block mb-1">4. Mandated Post-Treatment Surveillance Checkpoints</span>
+              <div className="grid grid-cols-2 gap-2 text-slate-600">
+                <p>• 6-Month Post-Treatment Chest X-Ray: <strong>{sixMonthApptDate ? new Date(sixMonthApptDate).toLocaleDateString() : "Registered (In 6 Months)"}</strong></p>
+                <p>• 1-Year Final Medical Clearance: <strong>{oneYearApptDate ? new Date(oneYearApptDate).toLocaleDateString() : "Registered (In 1 Year)"}</strong></p>
+              </div>
+            </div>
+          </div>
+
+          {/* Official Signatures */}
+          <div className="pt-10 flex justify-between items-end">
+            <div>
+              <p className="text-[10px] uppercase font-bold text-slate-400">Date Issued</p>
+              <p className="text-sm font-bold text-slate-900">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">TEREA Health Registry System Verified</p>
+            </div>
+            
+            <div className="text-center w-72">
+              <div className="border-b-2 border-slate-900 pb-1 mb-1">
+                <p className="text-base font-black uppercase text-slate-950">{cleanDoctorName}</p>
+              </div>
+              <p className="text-xs font-bold text-slate-700">Attending Physician • License Verified</p>
+              <p className="text-[11px] text-slate-500">Carmona TB DOTS Center • Cavite Health Office</p>
+            </div>
+          </div>
+
         </div>
       </div>
     </DashboardLayout>
