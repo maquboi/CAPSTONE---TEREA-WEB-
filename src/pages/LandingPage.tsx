@@ -23,7 +23,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
-const APK_DOWNLOAD_URL = "https://github.com/maquboi/CAPSTONE---TEREA-WEB-/releases/latest/download/TEREA-v1.0.apk";
+const APK_DOWNLOAD_URL = "https://github.com/maquboi/CAPSTONE---TEREA-WEB-/releases/latest/download/TEREA.apk";
 
 const features = [
   {
