@@ -383,23 +383,6 @@ export default function PatientDetail() {
   };
 
   useEffect(() => {
-    const fetchDoctorProfile = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          if (user.user_metadata?.full_name) {
-            setDoctorName(user.user_metadata.full_name);
-          } else {
-            // FIX: using maybeSingle() instead of single() to prevent 406 coercion error
-            const { data: p } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle();
-            if (p?.full_name) setDoctorName(p.full_name);
-          }
-        }
-      } catch (e) {
-        console.warn("Doctor profile query error:", e);
-      }
-    };
-    fetchDoctorProfile();
     fetchData();
   }, [id]);
 
@@ -427,16 +410,53 @@ export default function PatientDetail() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      // FIX: using maybeSingle() instead of single() so if no patient row matches, it doesn't fail with JSON coercion error
-      const { data: profile, error: profileErr } = await supabase
+
+      // 1. Session Check (Prevents 403 / 406 Coercion Crashes)
+      const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
+      if (sessionErr || !sessionData.session) {
+        triggerAlert("Session Expired", "Please log in to continue accessing clinic records.", "error");
+        setTimeout(() => navigate("/login"), 1500);
+        return;
+      }
+
+      const currentUser = sessionData.session.user;
+
+      // 2. Fetch Doctor Profile
+      if (currentUser.user_metadata?.full_name) {
+        setDoctorName(currentUser.user_metadata.full_name);
+      } else {
+        const { data: docProfile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', currentUser.id)
+          .maybeSingle();
+        if (docProfile?.full_name) setDoctorName(docProfile.full_name);
+      }
+
+      // 3. Fetch Patient Record safely with fallback
+      let { data: profile, error: profileErr } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', id)
         .maybeSingle();
         
       if (profileErr) throw profileErr;
+
+      // Fallback: If maybeSingle returns null, retry by primary key query
       if (!profile) {
-        throw new Error("Patient profile record could not be found or has been unlinked.");
+        const { data: listData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', id)
+          .limit(1);
+        if (listData && listData.length > 0) {
+          profile = listData[0];
+        }
+      }
+
+      if (!profile) {
+        triggerAlert("Patient Record Not Found", "The requested patient record could not be loaded or is not accessible with your current permissions.", "error");
+        return;
       }
       
       setPatient(profile);
@@ -517,6 +537,7 @@ export default function PatientDetail() {
       setTodayLogs(tLogs || []);
 
     } catch (err: any) {
+      console.error("Patient detail fetch failure:", err);
       triggerAlert(t("error"), err.message || "Failed to load patient records", "error");
     } finally {
       setLoading(false);
@@ -2233,7 +2254,6 @@ export default function PatientDetail() {
                 </CardContent>
               </Card>
 
-              {/* Medication Logs & Adherence History Card */}
               <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
                 <CardHeader className="pb-3 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 space-y-0">
                   <div>
