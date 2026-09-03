@@ -341,7 +341,6 @@ export default function PatientDetail() {
     return `${hrs % 12 || 12}:${mins} ${hrs >= 12 ? 'PM' : 'AM'}`;
   };
 
-  // --- HELPER: TABLET COUNT EXTRACTION FOR VISUAL DOSAGE ---
   const getTabletCount = (weight: number) => {
     if (weight >= 30 && weight <= 37) return 2;
     if (weight >= 38 && weight <= 54) return 3;
@@ -385,14 +384,19 @@ export default function PatientDetail() {
 
   useEffect(() => {
     const fetchDoctorProfile = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        if (user.user_metadata?.full_name) {
-          setDoctorName(user.user_metadata.full_name);
-        } else {
-          const { data: p } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
-          if (p?.full_name) setDoctorName(p.full_name);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          if (user.user_metadata?.full_name) {
+            setDoctorName(user.user_metadata.full_name);
+          } else {
+            // FIX: using maybeSingle() instead of single() to prevent 406 coercion error
+            const { data: p } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle();
+            if (p?.full_name) setDoctorName(p.full_name);
+          }
         }
+      } catch (e) {
+        console.warn("Doctor profile query error:", e);
       }
     };
     fetchDoctorProfile();
@@ -423,15 +427,19 @@ export default function PatientDetail() {
   const fetchData = async () => {
     try {
       setLoading(true);
+      // FIX: using maybeSingle() instead of single() so if no patient row matches, it doesn't fail with JSON coercion error
       const { data: profile, error: profileErr } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', id)
-        .single();
+        .maybeSingle();
         
       if (profileErr) throw profileErr;
-      setPatient(profile);
+      if (!profile) {
+        throw new Error("Patient profile record could not be found or has been unlinked.");
+      }
       
+      setPatient(profile);
       createAuditLog("Patient Record Viewed", "Patient Access", profile.full_name, { access_point: "Doctor Dashboard Detail Page" });
 
       if (profile?.treatment_start_date) setStartDate(profile.treatment_start_date);
@@ -509,7 +517,7 @@ export default function PatientDetail() {
       setTodayLogs(tLogs || []);
 
     } catch (err: any) {
-      triggerAlert(t("error"), err.message, "error");
+      triggerAlert(t("error"), err.message || "Failed to load patient records", "error");
     } finally {
       setLoading(false);
     }
@@ -1260,7 +1268,6 @@ export default function PatientDetail() {
   const sixMonthApptDate = appointments.find(a => a.title?.includes("6-Month"))?.appointment_date;
   const oneYearApptDate = appointments.find(a => a.title?.includes("1-Year"))?.appointment_date;
 
-  // --- ITEM 3: DSSM TINT HELPER ---
   const getDssmBadgeStyle = (result: string) => {
     if (result === 'Negative') return 'border-emerald-300 bg-emerald-50 text-emerald-800 font-bold';
     if (['1+', '2+', '3+'].includes(result)) return 'border-rose-300 bg-rose-50 text-rose-800 font-bold';
@@ -2047,7 +2054,6 @@ export default function PatientDetail() {
                 </CardHeader>
                 <CardContent className="flex-1 p-4 max-h-[500px] overflow-y-auto">
                   
-                  {/* --- ITEM 2: VISUAL DOSAGE TABLET PREVIEW --- */}
                   <div className="mb-6 p-4 bg-emerald-50 rounded-xl border border-emerald-100">
                     <div className="flex items-start gap-3">
                       <Info className="h-5 w-5 text-emerald-600 mt-0.5 shrink-0" />
@@ -2179,7 +2185,6 @@ export default function PatientDetail() {
                     </div>
                   </div>
 
-                  {/* --- ITEM 3: DYNAMIC COLOR-CODED BACTERIOLOGICAL TRAJECTORY --- */}
                   <div className="pt-2">
                     <div className="flex items-center justify-between mb-2">
                       <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
@@ -2347,6 +2352,55 @@ export default function PatientDetail() {
                   </div>
                 </CardContent>
               </Card>
+
+              {startDate && endDate && (
+                <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white mt-6">
+                  <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between space-y-0">
+                    <CardTitle className="flex items-center gap-2 text-md text-[#283618] font-bold">
+                      <Pill className="h-5 w-5 text-[#606C38]" /> Today's Medication Status
+                    </CardTitle>
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">
+                      {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                    </span>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    {activeMeds.length === 0 ? (
+                      <p className="text-sm text-slate-500 italic text-center py-4">No medications scheduled for today.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {activeMeds.map(med => {
+                          const log = todayLogs.find(l => l.medication_id.toString() === med.id.toString());
+                          return (
+                            <div key={med.id} className="flex justify-between items-center p-3 border border-slate-100 rounded-xl bg-slate-50">
+                              <div>
+                                <p className="text-sm font-bold text-slate-800">{med.name} <span className="text-slate-500 font-medium">({med.dosage})</span></p>
+                                <p className="text-xs text-slate-500 mt-0.5 font-medium">Target: {med.time}</p>
+                              </div>
+                              <div className="text-right flex flex-col items-end justify-center">
+                                {log && log.status === 'taken' ? (
+                                  <>
+                                    <Badge className="bg-emerald-100 text-emerald-800 border-none uppercase text-[10px] font-bold tracking-wider px-2 py-0.5 mb-1 flex items-center justify-center">
+                                      <CheckCircle2 className="w-3 h-3 mr-1 inline" /> {t("taken")}
+                                    </Badge>
+                                    <span className={`text-[10px] font-bold uppercase tracking-wider block mb-0.5 ${log.timing_status === 'on-time' ? 'text-emerald-600' : (log.timing_status === 'early' ? 'text-blue-600' : 'text-amber-600')}`}>
+                                      {log.timing_status === 'on-time' ? '🎯 On Time' : log.timing_status}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 font-medium block">at {formatTimeStr(log.time_taken)}</span>
+                                  </>
+                                ) : (
+                                  <Badge className="bg-amber-100 text-amber-800 border-none uppercase text-[10px] font-bold tracking-wider px-2 py-0.5 flex items-center justify-center">
+                                    <Activity className="w-3 h-3 mr-1 inline" /> Pending
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
         )}
@@ -2354,8 +2408,6 @@ export default function PatientDetail() {
         {/* --- TAB CONTENT: ROADMAP & PROTOCOLS --- */}
         {activeTab === 'roadmap' && (
           <div className="space-y-6 animate-fade-in">
-            
-            {/* --- ITEM 1: HORIZONTAL DOH NTP CLINICAL PROGRESSION STEPPER --- */}
             {startDate && (
               <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white p-6">
                 <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
@@ -2610,8 +2662,6 @@ export default function PatientDetail() {
         </style>
 
         <div className="border-2 border-slate-900 p-8 rounded-2xl relative">
-          
-          {/* Header */}
           <div className="flex items-center justify-between border-b-2 border-slate-900 pb-5 mb-6">
             <div>
               <p className="text-xs tracking-widest text-slate-500 font-bold uppercase mb-0.5">Republic of the Philippines • Province of Cavite</p>
@@ -2627,7 +2677,6 @@ export default function PatientDetail() {
             </div>
           </div>
 
-          {/* Certificate Title */}
           <div className="text-center my-6">
             <h2 className="text-2xl font-black tracking-wide text-slate-900 uppercase">
               E-Discharge & Medical Clearance Certificate
@@ -2637,7 +2686,6 @@ export default function PatientDetail() {
             </p>
           </div>
 
-          {/* Patient Identity */}
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6">
             <div className="grid grid-cols-2 gap-y-3 text-sm">
               <div>
@@ -2659,7 +2707,6 @@ export default function PatientDetail() {
             </div>
           </div>
 
-          {/* Verdict Banner */}
           <div className="text-center p-4 rounded-xl border border-slate-300 bg-slate-100/70 my-5">
             <span className="text-xs font-bold uppercase tracking-widest text-slate-500 block mb-1">Clinical Outcome Classification</span>
             <span className={`text-2xl font-black uppercase tracking-wider ${patient?.status === 'cured' ? 'text-emerald-800' : 'text-blue-800'}`}>
@@ -2672,13 +2719,11 @@ export default function PatientDetail() {
             </p>
           </div>
 
-          {/* Historical Clinical Evidence: DSSM Sputum Monitoring + Weight Progression */}
           <div className="space-y-4 my-6">
             <h4 className="text-xs font-extrabold uppercase tracking-widest text-slate-800 border-b pb-1">
               Clinical Evidence & Historical Progress Track Record
             </h4>
 
-            {/* Sputum Smear Table (DSSM) */}
             <div className="border border-slate-200 rounded-lg overflow-hidden">
               <div className="bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700">
                 1. Bacteriological Smear Monitoring History (Direct Sputum Smear Microscopy)
@@ -2713,7 +2758,6 @@ export default function PatientDetail() {
               </div>
             </div>
 
-            {/* Weight Recovery & Adherence Performance */}
             <div className="grid grid-cols-2 gap-4">
               <div className="border border-slate-200 rounded-lg p-3 text-xs">
                 <span className="font-bold text-slate-700 block mb-1.5">2. Nutritional Recovery & Weight Progression</span>
@@ -2738,7 +2782,6 @@ export default function PatientDetail() {
               </div>
             </div>
 
-            {/* Post-Care Surveillance Schedule */}
             <div className="border border-slate-200 rounded-lg p-3 text-xs bg-slate-50">
               <span className="font-bold text-slate-700 block mb-1">4. Mandated Post-Treatment Surveillance Checkpoints</span>
               <div className="grid grid-cols-2 gap-2 text-slate-600">
@@ -2748,7 +2791,6 @@ export default function PatientDetail() {
             </div>
           </div>
 
-          {/* Official Signatures */}
           <div className="pt-10 flex justify-between items-end">
             <div>
               <p className="text-[10px] uppercase font-bold text-slate-400">Date Issued</p>

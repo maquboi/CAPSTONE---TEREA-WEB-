@@ -2,6 +2,13 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
   LineChart,
   ClipboardCheck,
   ShieldCheck,
@@ -11,14 +18,18 @@ import {
   Activity,
   Download,
   Smartphone,
-  Lock
+  Lock,
+  QrCode,
+  CheckCircle2,
 } from "lucide-react";
+
+const APK_DOWNLOAD_URL = "https://github.com/maquboi/CAPSTONE---TEREA-WEB-/releases/latest/download/TEREA-v1.0.apk";
 
 const features = [
   {
     icon: ClipboardCheck,
     title: "Automated Risk Triage",
-    description: "Risk assessments instantly categorize patients by risk level, allowing you to prioritize critical cases.",
+    description: "Risk assessments instantly categorize patients by risk level, allowing clinicians to prioritize critical cases.",
   },
   {
     icon: LineChart,
@@ -49,14 +60,13 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const [parallaxY, setParallaxY] = useState(0);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
 
   useEffect(() => {
-    // Carousel Interval
     const interval = setInterval(() => {
       setCurrentImageIndex((prev) => (prev + 1) % carouselImages.length);
     }, 5000);
 
-    // Parallax Effect
     let ticking = false;
     const onScroll = () => {
       if (ticking) return;
@@ -75,6 +85,9 @@ export default function LandingPage() {
     };
   }, []);
 
+  // Live QR Code generated via pure URL (no extra npm packages required)
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(APK_DOWNLOAD_URL)}`;
+
   return (
     <div className="landing-green-wash relative min-h-screen overflow-hidden bg-white font-sans selection:bg-[#DDE5B6] selection:text-[#2D3B1E]">
       <div className="ambient-mesh" aria-hidden="true" />
@@ -82,6 +95,50 @@ export default function LandingPage() {
       <div className="ambient-blob blob-two" aria-hidden="true" />
       <div className="ambient-blob blob-three" aria-hidden="true" />
       
+      {/* QR Code Scan Modal */}
+      <Dialog open={qrModalOpen} onOpenChange={setQrModalOpen}>
+        <DialogContent className="sm:max-w-[380px] rounded-3xl p-6 text-center bg-white border-slate-200 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-extrabold text-[#2D3B1E] text-center">
+              Scan to Download APK
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 text-center mt-1">
+              Point your Android phone camera at the QR code to start downloading directly.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="my-5 flex flex-col items-center justify-center">
+            <div className="p-3 bg-white border-2 border-[#DDE5B6] rounded-2xl shadow-sm">
+              <img 
+                src={qrCodeUrl} 
+                alt="Scan to download TEREA APK" 
+                className="h-48 w-48 rounded-xl object-contain"
+              />
+            </div>
+            <div className="flex items-center gap-1.5 mt-3 text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full text-xs font-bold border border-emerald-200">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              <span>Direct GitHub CDN Delivery</span>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <a 
+              href={APK_DOWNLOAD_URL}
+              className="w-full flex items-center justify-center gap-2 text-xs font-bold text-white bg-[#606C38] hover:bg-[#2D3B1E] py-2.5 rounded-xl transition-colors"
+            >
+              <Download className="h-3.5 w-3.5" /> Direct Download Link
+            </a>
+            <Button 
+              variant="ghost" 
+              onClick={() => setQrModalOpen(false)}
+              className="w-full text-xs text-slate-500 hover:bg-slate-100 rounded-xl"
+            >
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Nav */}
       <header className="sticky top-0 z-50 border-b border-[#606C38]/15 bg-white/90 backdrop-blur-xl shadow-[0_8px_30px_rgba(45,59,30,0.06)]">
         <div className="flex h-16 w-full items-center justify-between px-6 sm:px-10">
@@ -90,24 +147,34 @@ export default function LandingPage() {
             <span className="text-xl font-extrabold tracking-tight text-[#2D3B1E]">TEREA</span>
           </div>
           
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-3 sm:gap-5">
             <button 
               onClick={() => navigate("/login")}
-              className="group flex items-center gap-1.5 text-sm font-semibold text-[#2D3B1E]/60 hover:text-[#606C38] transition-colors"
+              className="group flex items-center gap-1.5 text-sm font-semibold text-[#2D3B1E]/70 hover:text-[#606C38] transition-colors"
               title="Secure Staff Portal"
             >
               <Lock className="h-4 w-4 transition-transform group-hover:scale-110" />
               <span className="hidden sm:inline">Staff Portal</span>
             </button>
 
+            <Button
+              variant="outline"
+              onClick={() => setQrModalOpen(true)}
+              className="hidden lg:flex items-center gap-2 border-[#DDE5B6] text-[#2D3B1E] hover:bg-[#FEFAE0] rounded-xl text-xs font-bold h-9"
+            >
+              <QrCode className="h-3.5 w-3.5 text-[#606C38]" />
+              Scan QR
+            </Button>
+
             <a 
-              href="https://github.com/maquboi/CAPSTONE---TEREA-WEB-/releases/latest/download/TEREA-v1.0.apk" 
+              href={APK_DOWNLOAD_URL} 
               target="_blank"
               rel="noopener noreferrer"
-              className="btn-premium hidden sm:flex items-center gap-2 text-sm font-bold text-white bg-[#606C38] hover:bg-[#4A5529] px-5 py-2.5 rounded-xl shadow-sm transition-all"
+              className="btn-premium flex items-center gap-2 text-xs sm:text-sm font-bold text-white bg-[#606C38] hover:bg-[#4A5529] px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl shadow-sm transition-all"
             >
               <Smartphone className="h-4 w-4" />
-              Download for Android
+              <span className="hidden sm:inline">Download for Android</span>
+              <span className="sm:hidden">Get APK</span>
             </a>
           </div>
         </div>
@@ -121,49 +188,65 @@ export default function LandingPage() {
           style={{
             backgroundImage: `url('${carouselImages[currentImageIndex]}')`,
           }}
-        ></div>
+        />
         {/* Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-white/95 via-[#DDE5B6]/50 to-white/95"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-white/95 via-[#DDE5B6]/50 to-white/95" />
 
-        <section className="relative z-10 mx-auto max-w-6xl px-6 py-20 md:py-24 lg:py-28">
-          <div className="hero-layout grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-center xl:gap-12">
-            <div className="hero-copy space-y-5 lg:pr-4">
-              <h1 className="landing-reveal-up text-5xl font-extrabold leading-[1.02] tracking-[-0.03em] text-[#2D3B1E] lg:text-6xl drop-shadow-sm" style={{ animationDelay: "170ms" }}>
-                Risk Assessment and Healthcare Management<br/>
+        <section className="relative z-10 mx-auto max-w-6xl px-6 py-16 md:py-20 lg:py-24">
+          <div className="hero-layout grid gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-center xl:gap-12">
+            <div className="hero-copy space-y-6 lg:pr-4">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/80 border border-[#DDE5B6] rounded-full text-xs font-bold text-[#606C38] shadow-2xs">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                Municipality of Carmona TB DOTS Platform
+              </div>
+
+              <h1 className="landing-reveal-up text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-[1.05] tracking-[-0.03em] text-[#2D3B1E] drop-shadow-sm">
+                Risk Assessment & Clinical TB Management
               </h1>
-              <p className="landing-text-fade max-w-xl text-base font-medium leading-relaxed tracking-[0.01em] text-[#2D3B1E]/80 md:text-lg" style={{ animationDelay: "260ms" }}>
-                TEREA empowers healthcare providers in Carmona with a dashboard to monitor patient compliance, triage risks, and streamline clinical workflows in real-time.
+
+              <p className="landing-text-fade max-w-xl text-base font-medium leading-relaxed tracking-[0.01em] text-[#2D3B1E]/80 md:text-lg">
+                TEREA empowers healthcare workers and residents of Carmona with automated risk triage, daily medication adherence verification, and standardized DOH treatment roadmaps.
               </p>
               
-              {/* Mobile Only Download Button (Shows only on small screens) */}
-              <div className="sm:hidden pt-2 pb-1" style={{ animationDelay: "290ms" }}>
-                <a 
-                  href="https://github.com/maquboi/CAPSTONE---TEREA-WEB-/releases/latest/download/TEREA-v1.0.apk" 
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 w-full text-base font-bold text-white bg-[#606C38] hover:bg-[#2D3B1E] px-5 py-3.5 rounded-xl shadow-md transition-colors"
-                >
-                  <Smartphone className="h-5 w-5" />
-                  Download App for Android
-                  <Download className="h-4 w-4 ml-1" />
-                </a>
-                <p className="text-center text-[10px] text-slate-500 mt-2 font-medium italic">
-                  *Available exclusively for Android devices (.apk)
+              {/* Dual Action Download Area for Evaluators & Patients */}
+              <div className="pt-2 space-y-3">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <a 
+                    href={APK_DOWNLOAD_URL} 
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2.5 text-base font-bold text-white bg-[#606C38] hover:bg-[#2D3B1E] px-6 py-3.5 rounded-2xl shadow-md transition-all hover:shadow-lg hover:-translate-y-0.5"
+                  >
+                    <Smartphone className="h-5 w-5" />
+                    Download Android App (.apk)
+                    <Download className="h-4 w-4 ml-1" />
+                  </a>
+
+                  <Button
+                    variant="outline"
+                    onClick={() => setQrModalOpen(true)}
+                    className="h-[52px] rounded-2xl border-slate-300 bg-white/80 hover:bg-white text-[#2D3B1E] font-bold gap-2 px-5 shadow-xs"
+                  >
+                    <QrCode className="h-4 w-4 text-[#606C38]" />
+                    Scan with Phone
+                  </Button>
+                </div>
+
+                <p className="text-xs text-[#2D3B1E]/60 font-medium">
+                  Verified APK • Android 8.0+ • Official Release v1.0
                 </p>
               </div>
 
-              <div className="landing-reveal-up flex flex-wrap items-center gap-5 text-sm font-semibold text-[#2D3B1E]/90" style={{ animationDelay: "320ms" }}>
+              <div className="landing-reveal-up flex flex-wrap items-center gap-5 text-sm font-semibold text-[#2D3B1E]/90 pt-2">
                 <span className="flex items-center gap-1.5"><Users className="h-4 w-4 text-[#606C38]" /> Patient Tracking</span>
                 <span className="h-1 w-1 rounded-full bg-[#606C38]/60" />
                 <span className="flex items-center gap-1.5"><Activity className="h-4 w-4 text-[#606C38]" /> Automated Triage</span>
-              </div>
-              <div className="landing-reveal-up flex items-center gap-2 pt-4 text-xs font-semibold text-[#2D3B1E]/60" style={{ animationDelay: "380ms" }}>
-                <ShieldCheck className="h-4 w-4 text-green-600" />
-                <span>Designed with PH Data Privacy principles in mind</span>
+                <span className="h-1 w-1 rounded-full bg-[#606C38]/60" />
+                <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-emerald-600" /> DOH NTP Protocols</span>
               </div>
             </div>
 
-            <div className="hero-device-wrap landing-reveal-up flex justify-center lg:justify-end lg:pl-4" style={{ animationDelay: "220ms" }}>
+            <div className="hero-device-wrap landing-reveal-up flex justify-center lg:justify-end lg:pl-4">
               <div className="transition-transform duration-500 ease-in-out w-full max-w-md" style={{ transform: `translateY(${parallaxY}px)` }}>
                 <div className="relative" style={{ perspective: "2000px" }}>
                   <div className="absolute -inset-7 -z-10 rounded-[2rem] bg-gradient-to-br from-[#DDE5B6]/50 via-white/60 to-[#606C38]/25 blur-2xl" />
@@ -203,7 +286,7 @@ export default function LandingPage() {
                       <div className="glass-card rounded-xl p-3 bg-[#FEFAE0]/40 border border-[#DDE5B6]/50 space-y-2">
                         <div className="flex justify-between items-center">
                           <p className="text-xs font-bold text-[#2D3B1E]">Recent Activity</p>
-                          <span className="text-[10px] text-[#606C38] font-semibold">View All</span>
+                          <span className="text-[10px] text-[#606C38] font-semibold">Live Queue</span>
                         </div>
                         <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-100">
                           <div className="h-6 w-6 rounded-full bg-red-50 flex items-center justify-center">
@@ -229,15 +312,15 @@ export default function LandingPage() {
         <div className="glass-card grid grid-cols-1 divide-y divide-slate-100 rounded-2xl bg-white p-6 shadow-xl shadow-slate-200/50 sm:grid-cols-3 sm:divide-x sm:divide-y-0 border border-slate-100">
           <div className="flex flex-col items-center justify-center space-y-1 p-4 text-center">
             <h4 className="text-3xl font-extrabold text-[#2D3B1E]">Barangay</h4>
-            <p className="text-xs font-bold uppercase tracking-wider text-[#606C38]">Carmona</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-[#606C38]">Carmona Coverage</p>
           </div>
           <div className="flex flex-col items-center justify-center space-y-1 p-4 text-center">
             <h4 className="text-3xl font-extrabold text-[#2D3B1E]">Real-Time</h4>
-            <p className="text-xs font-bold uppercase tracking-wider text-[#606C38]">Risk Triage</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-[#606C38]">Clinical Triage</p>
           </div>
           <div className="flex flex-col items-center justify-center space-y-1 p-4 text-center">
-            <h4 className="text-3xl font-extrabold text-[#2D3B1E]">24/7</h4>
-            <p className="text-xs font-bold uppercase tracking-wider text-[#606C38]">Compliance</p>
+            <h4 className="text-3xl font-extrabold text-[#2D3B1E]">6-Month</h4>
+            <p className="text-xs font-bold uppercase tracking-wider text-[#606C38]">DOTS Adherence</p>
           </div>
         </div>
       </div>
@@ -246,12 +329,12 @@ export default function LandingPage() {
       <section className="relative bg-white py-24 md:py-28 z-10">
         <div className="mx-auto max-w-6xl px-6">
           <div className="mb-16 text-center md:mb-20">
-            <h2 className="landing-reveal-up text-3xl font-extrabold tracking-[-0.02em] text-[#2D3B1E]" style={{ animationDelay: "80ms" }}>Empowering Healthcare Providers</h2>
-            <p className="landing-text-fade mt-3 text-lg font-medium text-[#2D3B1E]/70" style={{ animationDelay: "160ms" }}>Tools designed specifically for medical staff to optimize the TB-DOTS program.</p>
+            <h2 className="landing-reveal-up text-3xl font-extrabold tracking-[-0.02em] text-[#2D3B1E]">Empowering Healthcare Providers</h2>
+            <p className="landing-text-fade mt-3 text-lg font-medium text-[#2D3B1E]/70">Tools designed specifically for medical staff to optimize the TB-DOTS program.</p>
           </div>
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
             {features.map((f, i) => (
-              <div key={f.title} className="feature-card glass-card landing-reveal-up rounded-2xl p-8 space-y-4 transition-all duration-500 ease-in-out hover:-translate-y-1.5 hover:border-[#606C38]/30 border border-slate-100 bg-white shadow-sm hover:shadow-md" style={{ animationDelay: `${220 + i * 90}ms` }}>
+              <div key={f.title} className="feature-card glass-card landing-reveal-up rounded-2xl p-8 space-y-4 transition-all duration-500 ease-in-out hover:-translate-y-1.5 hover:border-[#606C38]/30 border border-slate-100 bg-white shadow-sm hover:shadow-md">
                 <div className="feature-icon-wrap flex h-12 w-12 items-center justify-center rounded-xl bg-slate-50 shadow-sm border border-slate-100">
                   <f.icon className="h-6 w-6 text-[#606C38]" />
                 </div>
@@ -265,13 +348,10 @@ export default function LandingPage() {
 
       {/* How it works Section */}
       <section className="journey-section relative overflow-hidden py-24 md:py-28 bg-white border-t border-slate-100">
-        <div className="journey-glow journey-glow-left opacity-40" aria-hidden="true" />
-        <div className="journey-glow journey-glow-right opacity-40" aria-hidden="true" />
-
         <div className="relative mx-auto max-w-5xl px-6">
           <div className="mb-14 text-center">
-            <h2 className="landing-reveal-up text-3xl font-extrabold tracking-[-0.02em] text-[#2D3B1E] md:text-4xl" style={{ animationDelay: "120ms" }}>The Clinical Workflow</h2>
-            <p className="landing-text-fade mt-3 text-lg font-medium text-[#2D3B1E]/70" style={{ animationDelay: "180ms" }}>How TEREA bridges the gap between patient reporting and medical oversight.</p>
+            <h2 className="landing-reveal-up text-3xl font-extrabold tracking-[-0.02em] text-[#2D3B1E] md:text-4xl">The Clinical Workflow</h2>
+            <p className="landing-text-fade mt-3 text-lg font-medium text-[#2D3B1E]/70">How TEREA bridges the gap between patient reporting and medical oversight.</p>
           </div>
 
           <div className="relative">
@@ -282,7 +362,6 @@ export default function LandingPage() {
                 <div
                   key={i}
                   className={`step-card glass-card landing-reveal-up flex items-start gap-5 rounded-2xl p-6 transition-all duration-500 ease-in-out hover:-translate-y-1 hover:border-[#606C38]/30 bg-white border border-slate-100 shadow-sm hover:shadow-md ${i % 2 === 0 ? "sm:-translate-y-2" : "sm:translate-y-2"}`}
-                  style={{ animationDelay: `${210 + i * 80}ms` }}
                 >
                   <div className="step-index-ring flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[#606C38]/20 bg-[#DDE5B6]/20">
                     <div className="step-index flex h-9 w-9 items-center justify-center rounded-xl bg-[#DDE5B6]/50 text-base font-extrabold text-[#2D3B1E]">
@@ -303,26 +382,24 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t border-slate-100 bg-white py-10">
         <div className="mx-auto max-w-6xl px-6 flex flex-col items-center gap-6 sm:flex-row sm:justify-between">
-          <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left">
-            <div>
-              <p className="text-sm font-semibold text-[#2D3B1E]/80">
-                © 2026 TEREA. Municipality of Carmona.
-              </p>
-              <p className="text-xs font-medium text-[#2D3B1E]/50 mt-1 sm:mt-0.5">
-                Powered by React, Supabase, and AI.
-              </p>
-            </div>
+          <div className="text-center sm:text-left">
+            <p className="text-sm font-semibold text-[#2D3B1E]/80">
+              © 2026 TEREA. Municipality of Carmona.
+            </p>
+            <p className="text-xs font-medium text-[#2D3B1E]/50 mt-1 sm:mt-0.5">
+              Powered by React, Supabase, and Flutter.
+            </p>
           </div>
         
           <div className="flex items-center gap-4">
             <a 
-              href="https://github.com/maquboi/CAPSTONE---TEREA-WEB-/releases/latest/download/TEREA-v1.0.apk" 
+              href={APK_DOWNLOAD_URL} 
               target="_blank"
               rel="noopener noreferrer"
-              className="hidden sm:flex items-center gap-2 text-sm font-semibold text-[#606C38] hover:text-[#2D3B1E] transition-colors"
+              className="flex items-center gap-2 text-sm font-semibold text-[#606C38] hover:text-[#2D3B1E] transition-colors"
             >
               <Download className="h-4 w-4" />
-              Get Android App
+              Download APK
             </a>
             
             <Button 
