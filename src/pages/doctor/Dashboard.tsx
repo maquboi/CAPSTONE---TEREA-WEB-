@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { StatCard } from "@/components/ui/stat-card";
@@ -18,7 +19,6 @@ import {
   QrCode,
   RefreshCw,
   Calendar,
-  ShieldCheck,
   Loader2
 } from "lucide-react";
 import { useLanguage } from "../admin/LanguageContext";
@@ -76,6 +76,7 @@ const translations = {
 };
 
 export default function DoctorDashboard() {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const { language } = useLanguage();
   const t = (key: keyof typeof translations.en) =>
@@ -217,13 +218,22 @@ export default function DoctorDashboard() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        navigate("/login");
+        return;
+      }
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("full_name, clinic_code")
+        .select("full_name, clinic_code, role")
         .eq("id", user.id)
         .single();
+
+      // ROLE GATEKEEPER: Redirect admins to Admin Console
+      if (profile?.role === "admin") {
+        navigate("/admin/dashboard", { replace: true });
+        return;
+      }
 
       const fullName = profile?.full_name || "Doctor";
       const code = profile?.clinic_code || user.id.slice(0, 8).toUpperCase();
@@ -277,7 +287,7 @@ export default function DoctorDashboard() {
       if (channel) supabase.removeChannel(channel);
       window.removeEventListener("connectionUpdated", handleLocalUpdate);
     };
-  }, [doctorData.id]);
+  }, [doctorData.id, navigate]);
 
   const handleCopyCode = async () => {
     const textToCopy = doctorData.clinicCode;

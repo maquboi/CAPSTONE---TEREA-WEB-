@@ -13,7 +13,13 @@ import {
   ShieldCheck,
   LayoutDashboard,
   ChevronRight,
-  Loader2
+  Loader2,
+  FileBarChart,
+  Building2,
+  HelpCircle,
+  Headset,
+  AlertOctagon,
+  Shield
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,41 +38,40 @@ interface DashboardLayoutProps {
   userName?: string;
 }
 
-export function DashboardLayout({ children, role = "doctor", userName = "Doctor" }: DashboardLayoutProps) {
+export function DashboardLayout({ children, role = "doctor", userName }: DashboardLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [pendingRequestsCount, setPendingRequestsCount] = useState<number>(0);
   
-  // Physician profile info state
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [doctorDisplayName, setDoctorDisplayName] = useState<string>(userName);
+  const [displayName, setDisplayName] = useState<string>(userName || (role === "admin" ? "System Admin" : "Doctor"));
 
-  // Logout Confirmation State
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // Fetch pending intake count & doctor profile details
   useEffect(() => {
     let isMounted = true;
 
-    const fetchDoctorData = async () => {
+    const fetchUserData = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // 1. Fetch pending connection requests
-        const { count } = await supabase
-          .from("connections")
-          .select("*", { count: "exact", head: true })
-          .eq("doctor_id", user.id)
-          .eq("status", "pending");
+        // Fetch pending requests count only for clinical doctors
+        if (role === "doctor") {
+          const { count } = await supabase
+            .from("connections")
+            .select("*", { count: "exact", head: true })
+            .eq("doctor_id", user.id)
+            .eq("status", "pending");
 
-        if (count !== null && isMounted) {
-          setPendingRequestsCount(count);
+          if (count !== null && isMounted) {
+            setPendingRequestsCount(count);
+          }
         }
 
-        // 2. Fetch doctor avatar and full name
+        // Fetch user avatar and display name
         const { data: profile } = await supabase
           .from("profiles")
           .select("full_name, avatar_url")
@@ -75,38 +80,28 @@ export function DashboardLayout({ children, role = "doctor", userName = "Doctor"
 
         if (profile && isMounted) {
           if (profile.avatar_url) setAvatarUrl(profile.avatar_url);
-          if (profile.full_name) setDoctorDisplayName(profile.full_name);
+          if (profile.full_name) setDisplayName(profile.full_name);
         }
       } catch (err) {
-        console.error("Error fetching doctor data in sidebar:", err);
+        console.error("Error fetching user data in sidebar:", err);
       }
     };
 
-    fetchDoctorData();
-
-    // Listen to real-time updates for connections and profile changes
-    const connectionChannel = supabase
-      .channel("sidebar-connections-count")
-      .on("postgres_changes", { event: "*", schema: "public", table: "connections" }, () => {
-        fetchDoctorData();
-      })
-      .subscribe();
+    fetchUserData();
 
     const profileChannel = supabase
-      .channel("sidebar-doctor-profile-sync")
+      .channel("sidebar-profile-sync")
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" }, () => {
-        fetchDoctorData();
+        fetchUserData();
       })
       .subscribe();
 
     return () => {
       isMounted = false;
-      supabase.removeChannel(connectionChannel);
       supabase.removeChannel(profileChannel);
     };
-  }, []);
+  }, [role]);
 
-  // Close mobile drawer on route change
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [location.pathname]);
@@ -123,23 +118,23 @@ export function DashboardLayout({ children, role = "doctor", userName = "Doctor"
     }
   };
 
-  const currentName = doctorDisplayName || userName || "Doctor";
-  const cleanDoctorName = currentName
-    ? `Dr. ${currentName.replace(/^(dr\.?\s*)+/i, "").trim()}`
-    : "Dr. Attending Physician";
+  // Strictly prevent "Dr." from ever being attached to System Admins
+  const formattedName = role === "admin"
+    ? displayName.replace(/^(dr\.?\s*)+/i, "").trim() || "System Admin"
+    : `Dr. ${displayName.replace(/^(dr\.?\s*)+/i, "").trim() || "Attending Physician"}`;
 
   const getInitials = (name: string) => {
-    return name
-      .replace(/^(dr\.?\s*)+/i, "")
-      .trim()
+    const cleaned = name.replace(/^(dr\.?\s*)+/i, "").trim();
+    return cleaned
       .split(/\s+/)
       .map((n) => n[0])
       .join("")
       .substring(0, 2)
-      .toUpperCase() || "DR";
+      .toUpperCase() || (role === "admin" ? "SA" : "DR");
   };
 
-  const navItems = [
+  // Doctor Navigation items matching clinical workflow
+  const doctorNavItems = [
     {
       label: "Dashboard",
       path: "/doctor/dashboard",
@@ -169,7 +164,7 @@ export function DashboardLayout({ children, role = "doctor", userName = "Doctor"
       badge: null,
     },
     {
-      label: "My Profile",
+      label: "Physician Profile",
       path: "/doctor/profile",
       icon: User,
       exact: false,
@@ -184,9 +179,78 @@ export function DashboardLayout({ children, role = "doctor", userName = "Doctor"
     },
   ];
 
+  // Admin Navigation items mapped 1:1 with App.tsx routes
+  const adminNavItems = [
+    {
+      label: "Overview Dashboard",
+      path: "/admin/dashboard",
+      icon: LayoutDashboard,
+      exact: true,
+      badge: null,
+    },
+    {
+      label: "User Management",
+      path: "/admin/users",
+      icon: Users,
+      exact: false,
+      badge: null,
+    },
+    {
+      label: "Facility Management",
+      path: "/admin/facilities",
+      icon: Building2,
+      exact: false,
+      badge: null,
+    },
+    {
+      label: "System Reports",
+      path: "/admin/reports",
+      icon: FileBarChart,
+      exact: false,
+      badge: null,
+    },
+    {
+      label: "Audit Logs",
+      path: "/admin/audit-logs",
+      icon: Shield,
+      exact: false,
+      badge: null,
+    },
+    {
+      label: "System Error Logs",
+      path: "/admin/error-logs",
+      icon: AlertOctagon,
+      exact: false,
+      badge: null,
+    },
+    {
+      label: "IT & Helpdesk Support",
+      path: "/admin/support-tickets",
+      icon: Headset,
+      exact: false,
+      badge: null,
+    },
+    {
+      label: "FAQ Management",
+      path: "/admin/faq",
+      icon: HelpCircle,
+      exact: false,
+      badge: null,
+    },
+    {
+      label: "Admin Settings",
+      path: "/admin/settings",
+      icon: Settings,
+      exact: false,
+      badge: null,
+    },
+  ];
+
+  const navItems = role === "admin" ? adminNavItems : doctorNavItems;
+
   const isLinkActive = (path: string, exact: boolean = false) => {
     if (exact) {
-      return location.pathname === path || (path === "/doctor/dashboard" && location.pathname === "/doctor");
+      return location.pathname === path || (role === "admin" ? location.pathname === "/admin" : location.pathname === "/doctor");
     }
     return location.pathname.startsWith(path);
   };
@@ -202,10 +266,10 @@ export function DashboardLayout({ children, role = "doctor", userName = "Doctor"
           </div>
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-slate-900 text-center">
-              Sign Out of Workstation?
+              End {role === "admin" ? "Admin" : "Clinical"} Session?
             </DialogTitle>
             <DialogDescription className="text-slate-500 text-xs text-center mt-1.5 leading-relaxed">
-              Are you sure you want to end your clinical session? Make sure any open patient consultations or notes have been saved.
+              Are you sure you want to sign out? You will need to log back in to access the system.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-5 flex gap-2 sm:justify-center w-full">
@@ -235,14 +299,16 @@ export function DashboardLayout({ children, role = "doctor", userName = "Doctor"
           <img src="/LogoNoBG.png" alt="TEREA Logo" className="h-8 w-8 object-contain" />
           <div>
             <span className="font-extrabold text-base tracking-tight text-slate-900 block leading-tight">TEREA</span>
-            <span className="text-[10px] font-bold text-teal-700 uppercase tracking-widest block">TB-DOTS Clinician</span>
+            <span className={`text-[10px] font-bold uppercase tracking-widest block ${role === "admin" ? "text-indigo-600" : "text-teal-700"}`}>
+              {role === "admin" ? "Administration Console" : "TB-DOTS Clinician"}
+            </span>
           </div>
         </div>
 
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           className="p-2 rounded-xl text-slate-600 hover:bg-slate-100 transition-colors"
-          aria-label="Toggle mobile navigation menu"
+          aria-label="Toggle navigation menu"
         >
           {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
         </button>
@@ -251,29 +317,32 @@ export function DashboardLayout({ children, role = "doctor", userName = "Doctor"
       {/* --- DESKTOP SIDEBAR --- */}
       <aside className="hidden lg:flex flex-col w-64 border-r border-slate-200/90 bg-white fixed inset-y-0 left-0 z-30 shadow-xs">
         
-        {/* Clinic Branding Header */}
+        {/* Brand Header */}
         <div className="flex items-center gap-3 px-6 h-18 border-b border-slate-100">
           <img src="/LogoNoBG.png" alt="TEREA Logo" className="h-9 w-9 object-contain shrink-0" />
           <div className="flex flex-col">
             <span className="text-lg font-black tracking-tight text-slate-900 leading-none">TEREA</span>
-            <span className="text-[10px] font-bold text-teal-700 uppercase tracking-wider mt-1">
-              Carmona TB-DOTS
+            <span className={`text-[10px] font-bold uppercase tracking-wider mt-1 ${role === "admin" ? "text-indigo-600" : "text-teal-700"}`}>
+              {role === "admin" ? "Control Console" : "Carmona TB-DOTS"}
             </span>
           </div>
         </div>
 
-        {/* Workstation Category Header */}
+        {/* Section Label */}
         <div className="px-6 pt-5 pb-2">
           <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
-            Clinical Workstation
+            {role === "admin" ? "System Administration" : "Clinical Workstation"}
           </span>
         </div>
 
-        {/* Main Navigation Stack */}
+        {/* Dynamic Navigation Stack */}
         <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const active = isLinkActive(item.path, item.exact);
             const Icon = item.icon;
+
+            const activeColorClass = role === "admin" ? "bg-indigo-600 text-white" : "bg-teal-700 text-white";
+            const hoverIconClass = role === "admin" ? "group-hover:text-indigo-600" : "group-hover:text-teal-700";
 
             return (
               <Link
@@ -281,14 +350,14 @@ export function DashboardLayout({ children, role = "doctor", userName = "Doctor"
                 to={item.path}
                 className={`group flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
                   active
-                    ? "bg-teal-700 text-white shadow-xs"
+                    ? `${activeColorClass} shadow-xs`
                     : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                 }`}
               >
                 <div className="flex items-center gap-3">
                   <Icon
                     className={`h-4 w-4 transition-colors ${
-                      active ? "text-white" : "text-slate-400 group-hover:text-teal-700"
+                      active ? "text-white" : `text-slate-400 ${hoverIconClass}`
                     }`}
                   />
                   <span>{item.label}</span>
@@ -305,48 +374,49 @@ export function DashboardLayout({ children, role = "doctor", userName = "Doctor"
                     {item.badge}
                   </Badge>
                 ) : (
-                  active && <ChevronRight className="h-3.5 w-3.5 text-teal-200" />
+                  active && <ChevronRight className="h-3.5 w-3.5 opacity-70" />
                 )}
               </Link>
             );
           })}
         </nav>
 
-        {/* Health Center Facility Card */}
+        {/* Station Identity Card */}
         <div className="px-4 py-2">
-          <div className="flex items-center gap-2 p-2.5 rounded-xl bg-teal-50/70 border border-teal-200/80">
-            <ShieldCheck className="h-4 w-4 text-teal-700 shrink-0" />
+          <div className={`flex items-center gap-2 p-2.5 rounded-xl border ${role === "admin" ? "bg-indigo-50/70 border-indigo-200/80" : "bg-teal-50/70 border-teal-200/80"}`}>
+            {role === "admin" ? (
+              <Shield className="h-4 w-4 text-indigo-700 shrink-0" />
+            ) : (
+              <ShieldCheck className="h-4 w-4 text-teal-700 shrink-0" />
+            )}
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-extrabold uppercase text-teal-900 tracking-wider truncate">
-                Carmona Health Center
+              <p className={`text-[10px] font-extrabold uppercase tracking-wider truncate ${role === "admin" ? "text-indigo-900" : "text-teal-900"}`}>
+                {role === "admin" ? "Carmona Central Admin" : "Carmona Health Center"}
               </p>
-              <p className="text-[10px] text-teal-800/80 truncate">Overview</p>
+              <p className={`text-[10px] truncate ${role === "admin" ? "text-indigo-800/80" : "text-teal-800/80"}`}>
+                {role === "admin" ? "City Surveillance Node" : "CHO TB-DOTS Unit"}
+              </p>
             </div>
           </div>
         </div>
 
-        {/* Attending Physician Profile Badge (Photo with Monogram Fallback) */}
+        {/* Profile Card & Logout */}
         <div className="p-3 border-t border-slate-100 bg-slate-50/60">
           <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200 shadow-2xs">
             <div className="flex items-center gap-2.5 min-w-0">
-              {/* Doctor Avatar Container */}
-              <div className="h-9 w-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
+              <div className={`h-9 w-9 rounded-xl border flex items-center justify-center overflow-hidden shrink-0 shadow-2xs ${role === "admin" ? "bg-indigo-50 border-indigo-200 text-indigo-700" : "bg-teal-50 border-teal-200 text-teal-800"}`}>
                 {avatarUrl ? (
-                  <img
-                    src={avatarUrl}
-                    alt={cleanDoctorName}
-                    className="h-full w-full object-cover"
-                  />
+                  <img src={avatarUrl} alt={formattedName} className="h-full w-full object-cover" />
                 ) : (
-                  <div className="h-full w-full bg-teal-50 border border-teal-200/60 flex items-center justify-center font-bold text-xs text-teal-800">
-                    {getInitials(currentName)}
-                  </div>
+                  <span className="font-bold text-xs">{getInitials(formattedName)}</span>
                 )}
               </div>
 
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-slate-900 truncate">{cleanDoctorName}</p>
-                <p className="text-[10px] font-medium text-slate-400 truncate">Attending Physician</p>
+                <p className="text-xs font-bold text-slate-900 truncate">{formattedName}</p>
+                <p className="text-[10px] font-medium text-slate-400 truncate">
+                  {role === "admin" ? "System Administrator" : "Attending Physician"}
+                </p>
               </div>
             </div>
 
@@ -383,25 +453,20 @@ export function DashboardLayout({ children, role = "doctor", userName = "Doctor"
               </button>
             </div>
 
-            {/* Mobile Profile Identification Card */}
             <div className="p-4 border-b border-slate-100 bg-slate-50/50">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
+                <div className={`h-10 w-10 rounded-xl border flex items-center justify-center overflow-hidden shrink-0 ${role === "admin" ? "bg-indigo-50 border-indigo-200 text-indigo-700" : "bg-teal-50 border-teal-200 text-teal-800"}`}>
                   {avatarUrl ? (
-                    <img
-                      src={avatarUrl}
-                      alt={cleanDoctorName}
-                      className="h-full w-full object-cover"
-                    />
+                    <img src={avatarUrl} alt={formattedName} className="h-full w-full object-cover" />
                   ) : (
-                    <div className="h-full w-full bg-teal-50 border border-teal-200/60 flex items-center justify-center font-bold text-xs text-teal-800">
-                      {getInitials(currentName)}
-                    </div>
+                    <span className="font-bold text-xs">{getInitials(formattedName)}</span>
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold text-slate-900 truncate">{cleanDoctorName}</p>
-                  <p className="text-[10px] font-medium text-slate-500">Carmona Health Center</p>
+                  <p className="text-xs font-bold text-slate-900 truncate">{formattedName}</p>
+                  <p className="text-[10px] font-medium text-slate-500">
+                    {role === "admin" ? "System Administrator" : "Attending Physician"}
+                  </p>
                 </div>
               </div>
             </div>
@@ -417,7 +482,7 @@ export function DashboardLayout({ children, role = "doctor", userName = "Doctor"
                     to={item.path}
                     className={`flex items-center justify-between px-3.5 py-3 rounded-xl text-xs font-bold transition-all ${
                       active
-                        ? "bg-teal-700 text-white shadow-xs"
+                        ? role === "admin" ? "bg-indigo-600 text-white shadow-xs" : "bg-teal-700 text-white shadow-xs"
                         : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                     }`}
                   >
@@ -425,11 +490,6 @@ export function DashboardLayout({ children, role = "doctor", userName = "Doctor"
                       <Icon className={`h-4 w-4 ${active ? "text-white" : "text-slate-400"}`} />
                       <span>{item.label}</span>
                     </div>
-                    {item.badge && (
-                      <Badge className="bg-amber-100 text-amber-800 text-[9px] font-bold">
-                        {item.badge}
-                      </Badge>
-                    )}
                   </Link>
                 );
               })}

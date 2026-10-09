@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -34,7 +34,6 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-
   const [isSuccess, setIsSuccess] = useState(false);
 
   // Support Modal States
@@ -46,6 +45,28 @@ export default function Login() {
     "idle" | "loading" | "success" | "error"
   >("idle");
   const [supportError, setSupportError] = useState("");
+
+  // AUTO-REDIRECT: If session already exists, route user immediately by role
+  useEffect(() => {
+    const checkActiveSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", session.user.id)
+        .maybeSingle();
+
+      if (profile?.role === "admin") {
+        navigate("/admin/dashboard", { replace: true });
+      } else if (profile?.role === "doctor") {
+        navigate("/doctor/dashboard", { replace: true });
+      }
+    };
+
+    checkActiveSession();
+  }, [navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,7 +102,7 @@ export default function Login() {
         throw new Error("Profile record not found. Please contact IT support.");
       }
 
-      // 1. GATEKEEPER: Strict Patient Block
+      // Gatekeeper: Patients must use the mobile app
       if (profile.role === "patient") {
         throw new Error(
           "Access Denied: Patients must access their care portal using the TEREA Mobile App."
@@ -96,16 +117,17 @@ export default function Login() {
 
       setIsSuccess(true);
 
+      // 1-second transition to display the verified notification
       setTimeout(() => {
         if (profile.role === "admin") {
-          navigate("/admin/dashboard");
+          navigate("/admin/dashboard", { replace: true });
         } else if (profile.role === "doctor") {
-          navigate("/doctor/dashboard");
+          navigate("/doctor/dashboard", { replace: true });
         } else {
           setError("Unauthorized access.");
           setIsSuccess(false);
         }
-      }, 5000);
+      }, 1000);
     } catch (err: any) {
       setError(err.message || "Failed to sign in");
       await supabase.auth.signOut();
@@ -142,7 +164,7 @@ export default function Login() {
         setSupportEmail("");
         setSupportMessage("");
         setSupportType("");
-      }, 4000);
+      }, 2500);
     } catch (err: any) {
       setSupportError(err.message || "Failed to submit request.");
       setSupportStatus("error");
@@ -157,7 +179,7 @@ export default function Login() {
 
   return (
     <div className="relative flex min-h-screen overflow-hidden bg-[#F1F5F9] font-sans text-slate-900 selection:bg-teal-100 selection:text-teal-900">
-      {/* LEFT COLUMN: Carmona Health Center Photo Showcase */}
+      {/* LEFT COLUMN: Health Center Branding */}
       <div
         className="relative hidden lg:flex lg:w-[50%] bg-cover bg-center"
         style={{
@@ -165,12 +187,10 @@ export default function Login() {
           backgroundColor: "#042F2E",
         }}
       >
-        {/* Layered Deep Clinical Gradient Overlay */}
         <div className="absolute inset-0 bg-gradient-to-br from-[#042F2E]/92 via-[#042F2E]/80 to-[#0F766E]/70 backdrop-blur-[1px]" />
 
         <div className="relative z-10 flex w-full flex-col justify-between p-12 xl:p-16">
           <div className="space-y-8">
-            {/* Header Brand */}
             <div className="flex flex-col items-start">
               <div className="flex items-center gap-3 mb-2">
                 <img
@@ -187,7 +207,6 @@ export default function Login() {
               </span>
             </div>
 
-            {/* Headline */}
             <div className="space-y-4 pt-4">
               <h2 className="text-3xl font-extrabold leading-[1.15] tracking-tight text-white xl:text-4xl">
                 Secure clinical portal for tuberculosis care coordination.
@@ -197,7 +216,6 @@ export default function Login() {
               </p>
             </div>
 
-            {/* Feature Pills */}
             <div className="grid max-w-lg gap-3 sm:grid-cols-2 pt-2">
               <div className="flex items-center gap-3 rounded-xl border border-white/20 bg-white/10 p-3.5 text-xs font-semibold text-white backdrop-blur-md shadow-xs">
                 <ShieldCheck className="h-5 w-5 text-teal-300 shrink-0" />
@@ -220,10 +238,9 @@ export default function Login() {
         </div>
       </div>
 
-      {/* RIGHT COLUMN: Sign In Form with Makapal na Shadows */}
+      {/* RIGHT COLUMN: Sign In Form */}
       <div className="relative z-10 flex flex-1 items-center justify-center p-5 sm:p-10 lg:p-12">
         <div className="w-full max-w-[480px] space-y-7 rounded-2xl border border-slate-300/80 bg-white p-7 sm:p-10 shadow-[0_20px_50px_rgba(15,23,42,0.12)]">
-          {/* Navigation Back Button */}
           <div className="flex items-center justify-between">
             <button
               type="button"
@@ -238,7 +255,6 @@ export default function Login() {
             </span>
           </div>
 
-          {/* Small Screen Logo Header */}
           <div className="lg:hidden flex flex-col items-center text-center pt-2">
             <img
               src="/LogoNoBG.png"
@@ -251,7 +267,6 @@ export default function Login() {
             </p>
           </div>
 
-          {/* Title Area */}
           <div className="space-y-1 text-center lg:text-left">
             <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
               Log in
@@ -269,7 +284,6 @@ export default function Login() {
               </div>
             )}
 
-            {/* 1. Role Selection */}
             <div className="space-y-1.5">
               <Label
                 htmlFor="role"
@@ -295,7 +309,6 @@ export default function Login() {
               </Select>
             </div>
 
-            {/* 2. Email Address */}
             <div className="space-y-1.5">
               <Label
                 htmlFor="email"
@@ -313,7 +326,6 @@ export default function Login() {
               />
             </div>
 
-            {/* 3. Password */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label
@@ -354,7 +366,6 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Submit Button */}
             <Button
               type="submit"
               className="mt-3 h-11 w-full rounded-xl bg-teal-700 text-sm font-bold text-white shadow-md hover:bg-teal-800 transition-all hover:shadow-lg"
@@ -375,7 +386,6 @@ export default function Login() {
             </Button>
           </form>
 
-          {/* IT Support Contact Footer */}
           <div className="border-t border-slate-200 pt-4 text-center">
             <p className="text-xs text-slate-500">
               Need staff authorization?{" "}
@@ -391,7 +401,7 @@ export default function Login() {
         </div>
       </div>
 
-      {/* SUCCESS OVERLAY NOTIFICATION */}
+      {/* SUCCESS OVERLAY */}
       <div
         className={`fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-xs transition-all duration-300 ${
           isSuccess ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"
@@ -410,7 +420,7 @@ export default function Login() {
               Authorization Confirmed
             </h3>
             <p className="mt-1 text-xs text-slate-500 max-w-xs">
-              Redirecting to your clinical workstation...
+              Redirecting to your workstation...
             </p>
           </div>
 
