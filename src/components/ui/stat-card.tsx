@@ -1,75 +1,92 @@
-import { ReactNode } from "react";
-import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
 
 interface StatCardProps {
   title: string;
   value: string | number;
-  description?: string;
   icon: LucideIcon;
-  trend?: {
-    value: number;
-    isPositive: boolean;
-  };
-  variant?: "default" | "primary" | "warning" | "danger";
-  className?: string;
+  variant?: "default" | "danger" | "primary" | "warning";
+  subtitle?: string;
+  badge?: string;
+  onClick?: () => void;
 }
 
 export function StatCard({
   title,
   value,
-  description,
   icon: Icon,
-  trend,
   variant = "default",
-  className,
+  subtitle,
+  badge,
+  onClick,
 }: StatCardProps) {
+  // Clinical color variants
   const variantStyles = {
-    default: "bg-[linear-gradient(145deg,rgba(255,255,255,0.9),rgba(244,247,244,0.95))] border-[#DDE5B6]",
-    primary: "bg-[linear-gradient(145deg,rgba(221,229,182,0.42),rgba(244,247,244,0.92))] border-[#606C38]/20",
-    warning: "bg-[linear-gradient(145deg,rgba(221,229,182,0.28),rgba(255,250,230,0.95))] border-[#DDE5B6]",
-    danger: "bg-[linear-gradient(145deg,rgba(255,246,238,0.98),rgba(244,247,244,0.95))] border-[#DDE5B6]",
+    default: {
+      card: "bg-white border-slate-200/90 hover:border-slate-300",
+      iconBg: "bg-teal-50 text-teal-700 border-teal-200/70",
+      valueColor: "text-slate-900",
+      badgeColor: "bg-slate-100 text-slate-700 border-slate-200",
+    },
+    danger: {
+      card: "bg-white border-rose-200/90 hover:border-rose-300 shadow-2xs",
+      iconBg: "bg-rose-50 text-rose-700 border-rose-200",
+      valueColor: "text-rose-950",
+      badgeColor: "bg-rose-50 text-rose-800 border-rose-200",
+    },
+    primary: {
+      card: "bg-white border-sky-200/90 hover:border-sky-300",
+      iconBg: "bg-sky-50 text-sky-700 border-sky-200",
+      valueColor: "text-slate-900",
+      badgeColor: "bg-sky-50 text-sky-800 border-sky-200",
+    },
+    warning: {
+      card: "bg-white border-amber-200/90 hover:border-amber-300",
+      iconBg: "bg-amber-50 text-amber-700 border-amber-200",
+      valueColor: "text-slate-900",
+      badgeColor: "bg-amber-50 text-amber-800 border-amber-200",
+    },
   };
 
-  const iconStyles = {
-    default: "bg-[#DDE5B6]/45 text-[#606C38]",
-    primary: "bg-[#606C38]/10 text-[#606C38]",
-    warning: "bg-[#DDE5B6]/55 text-[#606C38]",
-    danger: "bg-[#DDE5B6]/35 text-[#2D3B1E]",
-  };
+  const current = variantStyles[variant];
 
   return (
     <div
-      className={cn(
-        "dashboard-surface rounded-2xl border p-5 transition-all duration-200 card-hover",
-        variantStyles[variant],
-        className
-      )}
+      onClick={onClick}
+      className={`relative overflow-hidden rounded-2xl border p-5 transition-all duration-200 shadow-xs ${
+        current.card
+      } ${onClick ? "cursor-pointer hover:shadow-md active:scale-[0.99]" : ""}`}
     >
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
-          <p className="text-sm font-medium text-[#2D3B1E]/70">{title}</p>
-          <p className="text-3xl font-semibold tracking-tight text-[#2D3B1E]">{value}</p>
-          {description && (
-            <p className="text-sm text-[#2D3B1E]/65">{description}</p>
-          )}
-          {trend && (
-            <div
-              className={cn(
-                "inline-flex items-center text-sm font-medium",
-                trend.isPositive ? "text-[#606C38]" : "text-[#8c3d2f]"
-              )}
-            >
-              <span>{trend.isPositive ? "↑" : "↓"}</span>
-              <span className="ml-1">{Math.abs(trend.value)}%</span>
-              <span className="ml-1 text-[#2D3B1E]/55 font-normal">vs last month</span>
-            </div>
-          )}
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            {title}
+          </span>
+          <div className="flex items-baseline gap-2">
+            <span className={`text-3xl font-black tracking-tight ${current.valueColor}`}>
+              {value}
+            </span>
+            {badge && (
+              <span
+                className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md border tracking-wide ${current.badgeColor}`}
+              >
+                {badge}
+              </span>
+            )}
+          </div>
         </div>
-        <div className={cn("rounded-lg p-2.5", iconStyles[variant])}>
-          <Icon className="h-5 w-5" />
+
+        <div
+          className={`h-11 w-11 rounded-xl border flex items-center justify-center shrink-0 shadow-2xs ${current.iconBg}`}
+        >
+          <Icon className="h-5 w-5 stroke-[2.2]" />
         </div>
       </div>
+
+      {subtitle && (
+        <p className="mt-3 text-[11px] font-medium text-slate-400 border-t border-slate-100 pt-2.5">
+          {subtitle}
+        </p>
+      )}
     </div>
   );
 }

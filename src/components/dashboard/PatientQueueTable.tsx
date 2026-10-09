@@ -23,13 +23,26 @@ import {
   Activity,
   CheckCircle2,
   AlertCircle,
-  Loader2
+  Loader2,
+  Inbox
 } from "lucide-react";
-
-// <-- ADDED IMPORT FOR THE NOTIFICATION HELPER -->
 import { sendNotificationToPatient } from "@/lib/notifications";
 
-export function PatientQueueTable({ search = "", riskFilter = "all", statusFilter = "all" }) {
+const getInitials = (name: string = "") => {
+  if (!name.trim()) return "PT";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+const getRiskColor = (level: string = "") => {
+  const normalStr = level.toLowerCase();
+  if (normalStr.includes("high")) return "bg-red-50 text-red-700 border-red-200 font-bold";
+  if (normalStr.includes("mod") || normalStr.includes("med")) return "bg-amber-50 text-amber-800 border-amber-200 font-bold";
+  return "bg-teal-50 text-teal-800 border-teal-200 font-semibold";
+};
+
+export function PatientQueueTable({ search = "", riskFilter = "all", statusFilter = "all" }: { search?: string; riskFilter?: string; statusFilter?: string }) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'pending' | 'active'>('pending');
   const [pendingList, setPendingList] = useState<any[]>([]);
@@ -37,7 +50,7 @@ export function PatientQueueTable({ search = "", riskFilter = "all", statusFilte
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
-  // Modern TEREA Center Popup Alert State
+  // Modern Clinical Popup Alert State
   const [alert, setAlert] = useState({ open: false, title: "", message: "", type: "success" as "success" | "error" });
   const triggerAlert = (title: string, message: string, type: "success" | "error" = "success") => {
     setAlert({ open: true, title, message, type });
@@ -108,7 +121,6 @@ export function PatientQueueTable({ search = "", riskFilter = "all", statusFilte
   useEffect(() => {
     fetchPatients();
 
-    // Listen for external updates (e.g. from Dashboard)
     const handleUpdate = () => fetchPatients();
     window.addEventListener('connectionUpdated', handleUpdate);
     return () => window.removeEventListener('connectionUpdated', handleUpdate);
@@ -119,25 +131,23 @@ export function PatientQueueTable({ search = "", riskFilter = "all", statusFilte
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
-      // Update connection status
       await supabase.from('connections')
         .update({ status: 'active' })
         .eq('doctor_id', user?.id)
         .eq('patient_id', patientId);
       
-      // <-- DISPATCH PUSH NOTIFICATION -->
       await sendNotificationToPatient({
         patientId,
         doctorId: user?.id,
-        title: "Request Approved! 🎉",
-        message: "Your doctor has approved your connection request. You can now view your treatment roadmap.",
+        title: "Connection Approved! 🎉",
+        message: "Your healthcare provider has approved your connection request. You can now access your treatment plan.",
       });
 
-      triggerAlert("Request Approved", `${patientName} has been successfully added to your active roster.`, "success");
+      triggerAlert("Request Approved", `${patientName} has been enrolled into your active clinical queue.`, "success");
       fetchPatients();
-      window.dispatchEvent(new Event('connectionUpdated')); // Notify Dashboard to update counts
-    } catch(err) {
-      triggerAlert("Error", "Failed to approve request.", "error");
+      window.dispatchEvent(new Event('connectionUpdated'));
+    } catch (err) {
+      triggerAlert("Error", "Failed to approve connection request.", "error");
     } finally {
       setProcessingId(null);
     }
@@ -148,157 +158,177 @@ export function PatientQueueTable({ search = "", riskFilter = "all", statusFilte
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
-      // Delete the connection request
       await supabase.from('connections')
         .delete()
         .eq('doctor_id', user?.id)
         .eq('patient_id', patientId);
         
-      // <-- DISPATCH PUSH NOTIFICATION -->
       await sendNotificationToPatient({
         patientId,
         doctorId: user?.id,
         title: "Connection Request Updated",
-        message: "Your doctor connection request was declined.",
+        message: "Your doctor connection request was not accepted.",
       });
 
-      triggerAlert("Request Declined", `The connection request from ${patientName} was declined.`, "error");
+      triggerAlert("Request Declined", `The connection request from ${patientName} was removed.`, "error");
       fetchPatients();
-      window.dispatchEvent(new Event('connectionUpdated')); // Notify Dashboard to update counts
-    } catch(err) {
-      triggerAlert("Error", "Failed to reject request.", "error");
+      window.dispatchEvent(new Event('connectionUpdated'));
+    } catch (err) {
+      triggerAlert("Error", "Failed to decline connection request.", "error");
     } finally {
       setProcessingId(null);
     }
   };
 
-  const getRiskColor = (level: string) => {
-    const normalStr = level?.toLowerCase() || "";
-    if (normalStr.includes("high")) return "bg-red-100 text-red-800 border-red-200";
-    if (normalStr.includes("mod") || normalStr.includes("med")) return "bg-amber-100 text-amber-900 border-amber-200";
-    return "bg-emerald-100 text-emerald-800 border-emerald-200";
-  };
-
   return (
-    <Card className="rounded-3xl shadow-sm border border-slate-200 bg-white overflow-hidden flex flex-col h-full">
+    <Card className="rounded-2xl shadow-sm border border-slate-300/80 bg-white overflow-hidden flex flex-col h-full font-sans">
       
-      {/* Modern TEREA Center Popup Dialog (Accessible) */}
+      {/* Centralized Notification Modal */}
       <Dialog open={alert.open} onOpenChange={(open) => setAlert({...alert, open})}>
         <DialogPortal>
-          <DialogOverlay className="bg-black/40 backdrop-blur-sm" />
-          <DialogContent className="sm:max-w-[400px] rounded-3xl p-6 text-center animate-in fade-in zoom-in-95 duration-200 bg-white border-slate-200 shadow-2xl font-sans">
-            <div className={`mx-auto w-14 h-14 rounded-full flex items-center justify-center mb-5 ${alert.type === 'success' ? 'bg-[#DDE5B6]/50' : 'bg-red-50'}`}>
-              {alert.type === 'success' ? <CheckCircle2 className="h-7 w-7 text-[#606C38]" /> : <AlertCircle className="h-7 w-7 text-red-500" />}
+          <DialogOverlay className="bg-black/40 backdrop-blur-xs" />
+          <DialogContent className="sm:max-w-[400px] rounded-2xl p-6 text-center animate-in fade-in zoom-in-95 duration-200 bg-white border-slate-200 shadow-2xl font-sans">
+            <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${alert.type === 'success' ? 'bg-teal-50 border border-teal-200' : 'bg-red-50 border border-red-200'}`}>
+              {alert.type === 'success' ? <CheckCircle2 className="h-6 w-6 text-teal-700" /> : <AlertCircle className="h-6 w-6 text-red-600" />}
             </div>
-            <DialogTitle className="text-xl font-extrabold text-slate-900">{alert.title}</DialogTitle>
-            <DialogDescription className="text-slate-500 mt-2 text-sm font-medium">{alert.message}</DialogDescription>
+            <DialogTitle className="text-base font-bold text-slate-900">{alert.title}</DialogTitle>
+            <DialogDescription className="text-slate-500 mt-1.5 text-xs font-medium leading-relaxed">{alert.message}</DialogDescription>
             <Button 
-              className={`mt-8 w-full rounded-2xl text-white h-12 font-bold transition-all active:scale-95 ${alert.type === 'success' ? 'bg-[#606C38] hover:bg-[#283618]' : 'bg-red-500 hover:bg-red-600'}`} 
+              className={`mt-6 w-full rounded-xl text-white h-10 text-xs font-bold transition-all shadow-xs ${alert.type === 'success' ? 'bg-teal-700 hover:bg-teal-800' : 'bg-red-600 hover:bg-red-700'}`} 
               onClick={() => setAlert({...alert, open: false})}
             >
-              Okay
+              Acknowledge
             </Button>
           </DialogContent>
         </DialogPortal>
       </Dialog>
 
-      <CardHeader className="pb-2 border-b border-slate-100 bg-slate-50/50">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <CardTitle className="text-lg font-bold text-slate-900">Patient Directory Snapshot</CardTitle>
+      {/* --- HEADER: TITLE & SEGMENTED SWITCHER --- */}
+      <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/70">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div>
+            <CardTitle className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Activity className="h-4 w-4 text-teal-700" />
+              Patient Queue Snapshot
+            </CardTitle>
+            <p className="text-[11px] text-slate-500 mt-0.5">Prioritized intake and active cohort monitoring</p>
+          </div>
           
-          {/* Tab Navigation */}
-          <div className="flex space-x-2 bg-slate-100/80 p-1 rounded-2xl w-full sm:w-auto overflow-x-auto scrollbar-hide border border-slate-200/60">
-            <Button 
-              variant="ghost"
+          {/* Segmented Queue Tab Controls */}
+          <div className="flex p-1 bg-slate-200/70 rounded-xl w-full sm:w-auto border border-slate-300/60 shadow-2xs">
+            <button 
               onClick={() => setActiveTab('pending')}
-              className={`rounded-xl px-5 h-9 font-bold transition-all text-xs sm:text-sm ${activeTab === 'pending' ? 'bg-white text-[#606C38] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold text-xs transition-all ${
+                activeTab === 'pending' 
+                  ? 'bg-white text-slate-900 shadow-xs' 
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
             >
-              Action Required
+              <span>Action Required</span>
               {pendingList.length > 0 && (
-                <span className={`ml-2 text-[10px] px-2 py-0.5 rounded-full ${activeTab === 'pending' ? 'bg-red-500 text-white' : 'bg-red-100 text-red-600'}`}>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                  activeTab === 'pending' ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-slate-300 text-slate-700'
+                }`}>
                   {pendingList.length}
                 </span>
               )}
-            </Button>
-            <Button 
-              variant="ghost"
+            </button>
+
+            <button 
               onClick={() => setActiveTab('active')}
-              className={`rounded-xl px-5 h-9 font-bold transition-all text-xs sm:text-sm ${activeTab === 'active' ? 'bg-white text-[#606C38] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`flex-1 sm:flex-initial flex items-center justify-center px-3.5 py-1.5 rounded-lg font-bold text-xs transition-all ${
+                activeTab === 'active' 
+                  ? 'bg-white text-slate-900 shadow-xs' 
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
             >
-              Recent Patients
-            </Button>
+              Recent Active
+            </button>
           </div>
         </div>
       </CardHeader>
       
+      {/* --- TABLE CONTENT --- */}
       <CardContent className="p-0 flex-1 flex flex-col">
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-[#606C38]" />
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-2">
+            <Loader2 className="h-6 w-6 animate-spin text-teal-700" />
+            <span className="text-xs">Loading patient intake queue...</span>
           </div>
         ) : (
           <div className="flex-1 overflow-x-auto">
             
-            {/* PENDING TAB */}
+            {/* PENDING / ACTION REQUIRED TAB */}
             {activeTab === 'pending' && (
               pendingList.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center px-4 animate-in fade-in duration-300">
-                  <div className="h-16 w-16 bg-[#DDE5B6]/30 rounded-full flex items-center justify-center mb-4">
-                    <ShieldCheck className="h-8 w-8 text-[#606C38]" />
+                <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+                  <div className="h-12 w-12 bg-teal-50 border border-teal-200 rounded-full flex items-center justify-center mb-3">
+                    <ShieldCheck className="h-6 w-6 text-teal-700" />
                   </div>
-                  <p className="text-slate-900 font-bold text-lg">You're all caught up!</p>
-                  <p className="text-slate-500 text-sm mt-1">There are no pending patient requests at the moment.</p>
+                  <p className="text-slate-900 font-bold text-sm">Intake Queue Clear</p>
+                  <p className="text-slate-500 text-xs mt-0.5">There are no pending patient connection requests awaiting review.</p>
                 </div>
               ) : (
-                <Table className="animate-in fade-in duration-300">
-                  <TableHeader className="bg-slate-50/50">
-                    <TableRow className="hover:bg-transparent border-slate-100">
-                      <TableHead className="text-xs font-bold text-slate-500 uppercase tracking-wider pl-6 h-11">Patient</TableHead>
-                      <TableHead className="text-xs font-bold text-slate-500 uppercase tracking-wider h-11">Risk Level</TableHead>
-                      <TableHead className="text-xs font-bold text-slate-500 uppercase tracking-wider h-11">Date Requested</TableHead>
-                      <TableHead className="text-xs font-bold text-slate-500 uppercase tracking-wider text-right pr-6 h-11">Actions</TableHead>
+                <Table>
+                  <TableHeader className="bg-slate-50/90 border-b border-slate-200">
+                    <TableRow className="hover:bg-transparent border-slate-200">
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider text-slate-600 pl-6 h-10">Patient Profile</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider text-slate-600 h-10">Triage Risk</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider text-slate-600 h-10">Requested</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider text-slate-600 text-right pr-6 h-10">Decisions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {pendingList.map((req) => {
                       const profile = Array.isArray(req.profiles) ? req.profiles[0] : req.profiles;
                       const isProcessing = processingId === req.patient_id;
+                      const patientName = profile?.full_name || "Unknown Patient";
 
                       return (
-                        <TableRow key={req.patient_id} className="hover:bg-slate-50 border-slate-100 transition-colors">
-                          <TableCell className="pl-6 py-4">
+                        <TableRow key={req.patient_id} className="hover:bg-slate-50/70 border-b border-slate-100 transition-colors">
+                          <TableCell className="pl-6 py-3">
                             <div className="flex items-center gap-3">
-                              <div className="h-10 w-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
+                              {/* Clinical ID Card-Style Avatar */}
+                              <div className="h-10 w-10 rounded-xl bg-slate-100 border border-slate-200 shadow-2xs flex items-center justify-center overflow-hidden shrink-0">
                                 {profile?.avatar_url ? (
-                                  <img src={profile.avatar_url} alt={profile.full_name} className="h-full w-full object-cover" />
+                                  <img 
+                                    src={profile.avatar_url} 
+                                    alt={patientName} 
+                                    className="h-full w-full object-cover" 
+                                  />
                                 ) : (
-                                  <User className="h-5 w-5 text-slate-400" />
+                                  <span className="text-xs font-bold text-teal-800 bg-teal-50 h-full w-full flex items-center justify-center border border-teal-200/60">
+                                    {getInitials(patientName)}
+                                  </span>
                                 )}
                               </div>
-                              <span className="font-bold text-slate-900">{profile?.full_name || "Unknown Patient"}</span>
+                              <span className="font-semibold text-xs text-slate-900">{patientName}</span>
                             </div>
                           </TableCell>
+
                           <TableCell>
-                            <Badge variant="outline" className={`font-bold uppercase text-[10px] tracking-wider border px-2 py-0.5 ${getRiskColor(profile?.risk_level)}`}>
+                            <Badge variant="outline" className={`rounded-md text-[10px] px-2 py-0.5 uppercase tracking-wide border ${getRiskColor(profile?.risk_level)}`}>
                               {profile?.risk_level || "Pending"}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-sm font-medium text-slate-500">
+
+                          <TableCell className="text-xs font-medium text-slate-500 whitespace-nowrap">
                             <div className="flex items-center gap-1.5">
-                              <Clock className="h-3.5 w-3.5" />
+                              <Clock className="h-3 w-3 text-slate-400" />
                               {new Date(req.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                             </div>
                           </TableCell>
-                          <TableCell className="pr-6 text-right">
-                            <div className="flex items-center justify-end gap-2">
+
+                          <TableCell className="pr-6 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1.5">
                               <Button 
                                 size="sm" 
                                 variant="outline" 
                                 onClick={() => handleApprove(req.patient_id, profile?.full_name)}
                                 disabled={isProcessing}
-                                className="h-8 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white transition-colors rounded-lg font-bold"
+                                className="h-8 border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-700 hover:text-white transition-colors rounded-lg font-bold text-xs px-2.5 shadow-2xs"
                               >
-                                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}
+                                {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5 mr-1" />}
                                 Approve
                               </Button>
                               <Button 
@@ -306,9 +336,10 @@ export function PatientQueueTable({ search = "", riskFilter = "all", statusFilte
                                 variant="outline" 
                                 onClick={() => handleReject(req.patient_id, profile?.full_name)}
                                 disabled={isProcessing}
-                                className="h-8 w-8 border-red-200 bg-red-50 text-red-600 hover:bg-red-500 hover:text-white transition-colors rounded-lg"
+                                className="h-8 w-8 border-slate-200 text-slate-400 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-colors rounded-lg"
+                                title="Decline request"
                               >
-                                <X className="h-4 w-4" />
+                                <X className="h-3.5 w-3.5" />
                               </Button>
                             </div>
                           </TableCell>
@@ -320,56 +351,72 @@ export function PatientQueueTable({ search = "", riskFilter = "all", statusFilte
               )
             )}
 
-            {/* ACTIVE TAB */}
+            {/* ACTIVE RECENT TAB */}
             {activeTab === 'active' && (
               activeList.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center px-4 animate-in fade-in duration-300">
-                  <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                    <Activity className="h-8 w-8 text-slate-400" />
+                <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+                  <div className="h-12 w-12 bg-slate-100 rounded-full flex items-center justify-center mb-3">
+                    <Inbox className="h-6 w-6 text-slate-400" />
                   </div>
-                  <p className="text-slate-900 font-bold text-lg">No Active Patients</p>
-                  <p className="text-slate-500 text-sm mt-1">You currently have no active patients in your roster.</p>
+                  <p className="text-slate-900 font-bold text-sm">No Active Patients</p>
+                  <p className="text-slate-500 text-xs mt-0.5">There are no approved patients linked in your active roster.</p>
                 </div>
               ) : (
-                <Table className="animate-in fade-in duration-300">
-                  <TableHeader className="bg-slate-50/50">
-                    <TableRow className="hover:bg-transparent border-slate-100">
-                      <TableHead className="text-xs font-bold text-slate-500 uppercase tracking-wider pl-6 h-11">Patient</TableHead>
-                      <TableHead className="text-xs font-bold text-slate-500 uppercase tracking-wider h-11">Risk Level</TableHead>
-                      <TableHead className="text-xs font-bold text-slate-500 uppercase tracking-wider text-right pr-6 h-11">Action</TableHead>
+                <Table>
+                  <TableHeader className="bg-slate-50/90 border-b border-slate-200">
+                    <TableRow className="hover:bg-transparent border-slate-200">
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider text-slate-600 pl-6 h-10">Patient Profile</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider text-slate-600 h-10">Triage Risk</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider text-slate-600 text-right pr-6 h-10">Clinical Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {activeList.map((req) => {
                       const profile = Array.isArray(req.profiles) ? req.profiles[0] : req.profiles;
+                      const patientName = profile?.full_name || "Unknown Patient";
 
                       return (
-                        <TableRow key={req.patient_id} className="hover:bg-slate-50 border-slate-100 transition-colors">
-                          <TableCell className="pl-6 py-4">
+                        <TableRow key={req.patient_id} className="hover:bg-slate-50/70 border-b border-slate-100 transition-colors">
+                          <TableCell className="pl-6 py-3">
                             <div className="flex items-center gap-3">
-                              <div className="h-10 w-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
+                              {/* Clinical ID Card-Style Avatar */}
+                              <div className="h-10 w-10 rounded-xl bg-slate-100 border border-slate-200 shadow-2xs flex items-center justify-center overflow-hidden shrink-0">
                                 {profile?.avatar_url ? (
-                                  <img src={profile.avatar_url} alt={profile.full_name} className="h-full w-full object-cover" />
+                                  <img 
+                                    src={profile.avatar_url} 
+                                    alt={patientName} 
+                                    className="h-full w-full object-cover" 
+                                  />
                                 ) : (
-                                  <User className="h-5 w-5 text-slate-400" />
+                                  <span className="text-xs font-bold text-teal-800 bg-teal-50 h-full w-full flex items-center justify-center border border-teal-200/60">
+                                    {getInitials(patientName)}
+                                  </span>
                                 )}
                               </div>
-                              <span className="font-bold text-slate-900">{profile?.full_name || "Unknown Patient"}</span>
+                              <button
+                                onClick={() => navigate(`/doctor/patient-details/${req.patient_id}`)}
+                                className="font-semibold text-xs text-slate-900 hover:text-teal-700 transition-colors text-left"
+                              >
+                                {patientName}
+                              </button>
                             </div>
                           </TableCell>
+
                           <TableCell>
-                            <Badge variant="outline" className={`font-bold uppercase text-[10px] tracking-wider border px-2 py-0.5 ${getRiskColor(profile?.risk_level)}`}>
-                              {profile?.risk_level || "Pending"}
+                            <Badge variant="outline" className={`rounded-md text-[10px] px-2 py-0.5 uppercase tracking-wide border ${getRiskColor(profile?.risk_level)}`}>
+                              {profile?.risk_level || "Standard"}
                             </Badge>
                           </TableCell>
-                          <TableCell className="pr-6 text-right">
+
+                          <TableCell className="pr-6 text-right whitespace-nowrap">
                             <Button 
                               size="sm" 
                               variant="ghost" 
                               onClick={() => navigate(`/doctor/patient-details/${req.patient_id}`)}
-                              className="h-8 text-[#606C38] hover:bg-[#DDE5B6]/50 rounded-lg font-bold"
+                              className="h-8 text-xs font-bold text-teal-700 hover:bg-teal-50 hover:text-teal-900 rounded-lg gap-1"
                             >
-                              Review <ArrowRight className="h-4 w-4 ml-1" />
+                              <span>Open Chart</span>
+                              <ArrowRight className="h-3.5 w-3.5" />
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -383,13 +430,15 @@ export function PatientQueueTable({ search = "", riskFilter = "all", statusFilte
         )}
       </CardContent>
 
-      <div className="p-4 border-t border-slate-100 bg-slate-50/50 mt-auto flex justify-center">
+      {/* --- FOOTER: DIRECTORY LINK --- */}
+      <div className="p-3.5 border-t border-slate-100 bg-slate-50/50 mt-auto flex justify-center">
         <Button 
           variant="outline" 
           onClick={() => navigate("/doctor/patients")} 
-          className="w-full sm:w-auto border-slate-200 text-slate-600 hover:text-[#606C38] hover:bg-[#FEFAE0] hover:border-[#DDE5B6] rounded-xl font-bold transition-all"
+          className="w-full sm:w-auto border-slate-300 text-slate-700 hover:text-teal-800 hover:bg-slate-100 rounded-xl font-bold text-xs h-9 transition-all shadow-2xs"
         >
-          View All Patients Directory <ArrowRight className="h-4 w-4 ml-2" />
+          <span>Open Full Patient Directory</span>
+          <ArrowRight className="h-3.5 w-3.5 ml-1.5 text-teal-700" />
         </Button>
       </div>
     </Card>

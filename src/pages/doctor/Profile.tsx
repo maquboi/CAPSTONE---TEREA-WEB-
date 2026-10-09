@@ -7,37 +7,40 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Camera, CheckCircle, AlertCircle, Copy, Check, Clock, ShieldCheck, Building2 } from "lucide-react";
+import { 
+  Camera, CheckCircle2, AlertCircle, Copy, Check, Clock, 
+  ShieldCheck, Building2, Mail, Phone, FileText, Loader2, User
+} from "lucide-react";
 import { useLanguage } from "../admin/LanguageContext";
 
 const translations: Record<string, Record<string, string>> = {
   en: {
     profileUpdated: "Profile Updated",
-    profileSaved: "Your profile information and clinic schedule have been saved successfully.",
-    pageTitle: "Physician Profile",
-    pageSubtitle: "Manage your credentials, clinic affiliation, and consultation hours",
-    profilePicTitle: "Profile Photo",
-    profilePicDesc: "Upload an official clinical photo",
+    profileSaved: "Your physician profile and clinical duty schedule have been saved successfully.",
+    pageTitle: "Physician Credentials & Profile",
+    pageSubtitle: "Manage your medical licensing, facility affiliation, and consultation duty hours",
+    profilePicTitle: "Official Identification Photo",
+    profilePicDesc: "Upload an official clinical portrait or headshot",
     personalInfoTitle: "Physician Credentials & Personal Details",
-    personalInfoDesc: "Update your official DOH licensing and facility information",
-    fullName: "Full Name (with Title)",
-    email: "Email Address",
-    phone: "Contact Number",
+    personalInfoDesc: "Update your official DOH / PRC licensing details and health center facility assignment",
+    fullName: "Full Legal Name (with Title)",
+    email: "Official Email Address",
+    phone: "Direct Contact Number",
     clinicName: "Assigned Health Facility / Clinic",
-    license: "PRC License Number",
+    license: "PRC Medical License Number",
     clinicCode: "Unique Clinic Linking Code",
-    consultationHours: "Consultation / Duty Hours",
-    startHour: "Start Time",
-    endHour: "End Time",
+    consultationHours: "Consultation & Duty Hours",
+    startHour: "Duty Start Time",
+    endHour: "Duty End Time",
     saveChanges: "Save Profile Changes",
     saving: "Saving Updates...",
     errorTitle: "Error",
-    errorDesc: "Failed to update profile. Please check your network and try again.",
-    okBtn: "Okay",
+    errorDesc: "Failed to update profile. Please verify your connection and try again.",
+    okBtn: "Acknowledge",
     copied: "Copied!",
     copyCode: "Copy Code",
     imageUploaded: "Photo Updated",
-    imageUploadedDesc: "Your profile photo was updated successfully.",
+    imageUploadedDesc: "Your clinical profile photo was updated successfully.",
   },
   fil: {
     profileUpdated: "Na-update ang Profile",
@@ -61,7 +64,7 @@ const translations: Record<string, Record<string, string>> = {
     saving: "Nagse-save...",
     errorTitle: "Error",
     errorDesc: "Nabigong i-update ang profile. Pakisubukan muli.",
-    okBtn: "Okay",
+    okBtn: "Sige",
     copied: "Nakopya na!",
     copyCode: "Kopyahin ang Code",
     imageUploaded: "Na-update ang Larawan",
@@ -137,16 +140,14 @@ export default function DoctorProfile() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      triggerAlert(t("errorTitle"), "Photo must be less than 5MB.", "error");
+      triggerAlert(t("errorTitle"), "Photo file size must be under 5MB.", "error");
       return;
     }
 
     setIsUploadingPhoto(true);
 
     try {
-      // Client-side image compression to 256x256 WebP Data URL for instant rendering and persistence
       const compressedDataUrl = await compressImage(file, 256, 256);
 
       const { data: { user } } = await supabase.auth.getUser();
@@ -195,7 +196,6 @@ export default function DoctorProfile() {
         const ctx = canvas.getContext("2d");
         ctx?.drawImage(img, 0, 0, width, height);
 
-        // Convert to compact WebP / JPEG format
         const dataUrl = canvas.toDataURL("image/webp", 0.85);
         resolve(dataUrl);
       };
@@ -207,7 +207,7 @@ export default function DoctorProfile() {
     setIsSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("No active user");
+      if (!user) throw new Error("No active user session");
 
       const { error: profileError } = await supabase
         .from('profiles')
@@ -228,7 +228,7 @@ export default function DoctorProfile() {
         doctor_id: user.id,
         action: 'Profile Update',
         patient: 'N/A',
-        details: `Updated personal credentials and schedule (${profile.startHour} - ${profile.endHour}).`
+        details: `Updated personal credentials and schedule (${profile.startHour} – ${profile.endHour}).`
       }]);
 
       setDoctorName(profile.fullName);
@@ -251,8 +251,8 @@ export default function DoctorProfile() {
   const getInitials = (name: string) => {
     if (!name) return "DR";
     return name
-      .replace(/^Dr\.?\s*/i, "")
-      .split(" ")
+      .replace(/^(dr\.?\s*)+/i, "")
+      .split(/\s+/)
       .map(n => n[0])
       .join("")
       .substring(0, 2)
@@ -261,26 +261,26 @@ export default function DoctorProfile() {
 
   const cleanDisplayDoctorName = (name: string) => {
     if (!name) return "Doctor";
-    return `Dr. ${name.replace(/^Dr\.?\s*/i, "")}`;
+    return `Dr. ${name.replace(/^(dr\.?\s*)+/i, "").trim()}`;
   };
 
   return (
     <DashboardLayout role="doctor" userName={doctorName}>
       
-      {/* Accessible Centered Dialog */}
+      {/* Centralized Notification Modal */}
       <Dialog open={alert.open} onOpenChange={(open) => setAlert({ ...alert, open })}>
         <DialogContent className="sm:max-w-[400px] rounded-2xl p-6 text-center bg-white border-slate-200 shadow-xl font-sans">
-          <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${alert.type === 'success' ? 'bg-[#DDE5B6]' : 'bg-red-100'}`}>
-            {alert.type === 'success' ? <CheckCircle className="h-6 w-6 text-[#606C38]" /> : <AlertCircle className="h-6 w-6 text-red-600" />}
+          <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${alert.type === 'success' ? 'bg-teal-50 border border-teal-200' : 'bg-red-50 border border-red-200'}`}>
+            {alert.type === 'success' ? <CheckCircle2 className="h-6 w-6 text-teal-700" /> : <AlertCircle className="h-6 w-6 text-red-600" />}
           </div>
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-slate-900 text-center">{alert.title}</DialogTitle>
-            <DialogDescription className="text-slate-600 mt-2 text-sm text-center">
+            <DialogTitle className="text-base font-bold text-slate-900 text-center">{alert.title}</DialogTitle>
+            <DialogDescription className="text-slate-500 mt-1.5 text-xs text-center leading-relaxed">
               {alert.message}
             </DialogDescription>
           </DialogHeader>
           <Button 
-            className="mt-6 w-full rounded-xl bg-[#606C38] hover:bg-[#2D3B1E] text-white font-bold" 
+            className="mt-6 w-full rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs h-10 shadow-xs" 
             onClick={() => setAlert({ ...alert, open: false })}
           >
             {t("okBtn")}
@@ -288,24 +288,44 @@ export default function DoctorProfile() {
         </DialogContent>
       </Dialog>
 
-      <div className="account-page mx-auto max-w-6xl space-y-6 animate-fade-in">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-extrabold tracking-tight text-[#2D3B1E]">{t("pageTitle")}</h1>
-          <p className="text-sm text-slate-500">{t("pageSubtitle")}</p>
+      <div className="mx-auto max-w-6xl space-y-6 animate-fade-in font-sans">
+        
+        {/* --- PAGE HEADER BANNER --- */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white p-6 rounded-2xl border border-slate-300/80 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+          <div className="space-y-1">
+            <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200">
+              <span className="h-1.5 w-1.5 rounded-full bg-teal-600 animate-pulse" />
+              Verified Clinical Identity
+            </div>
+            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 pt-1">{t("pageTitle")}</h1>
+            <p className="text-slate-500 text-xs font-normal">{t("pageSubtitle")}</p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button 
+              onClick={handleSave} 
+              disabled={isSaving}
+              className="bg-teal-700 hover:bg-teal-800 text-white rounded-xl h-10 px-5 font-bold text-xs shadow-xs transition-all disabled:opacity-70"
+            >
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Check className="h-4 w-4 mr-1.5" />}
+              {isSaving ? t("saving") : t("saveChanges")}
+            </Button>
+          </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
+        <div className="grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
           
-          {/* Left Column: Avatar & Quick Info */}
+          {/* --- LEFT COLUMN: PHYSICIAN CREDENTIALS & LINKING CARD --- */}
           <div className="space-y-6">
-            <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-              <CardHeader className="pb-3 border-b border-slate-100 bg-[#F4F7F4]/50">
-                <CardTitle className="text-sm font-bold text-[#2D3B1E] uppercase tracking-wider">{t("profilePicTitle")}</CardTitle>
-                <CardDescription className="text-xs text-slate-500">{t("profilePicDesc")}</CardDescription>
+            
+            {/* Physician Identification Card */}
+            <Card className="rounded-2xl border border-slate-300/80 bg-white shadow-sm overflow-hidden">
+              <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/70">
+                <CardTitle className="text-xs font-bold text-slate-700 uppercase tracking-wider">{t("profilePicTitle")}</CardTitle>
+                <CardDescription className="text-[11px] text-slate-500">{t("profilePicDesc")}</CardDescription>
               </CardHeader>
               <CardContent className="pt-6 flex flex-col items-center text-center">
                 
-                {/* Real File Input */}
                 <input 
                   type="file" 
                   ref={fileInputRef} 
@@ -315,9 +335,9 @@ export default function DoctorProfile() {
                 />
 
                 <div className="relative mb-4">
-                  <Avatar className="h-24 w-24 ring-4 ring-[#DDE5B6] ring-offset-2 ring-offset-white shadow-sm">
+                  <Avatar className="h-28 w-28 rounded-2xl border-2 border-teal-200 shadow-sm">
                     <AvatarImage src={profile.avatarUrl} className="object-cover" />
-                    <AvatarFallback className="bg-[#606C38] text-2xl font-black text-white">
+                    <AvatarFallback className="bg-teal-50 text-teal-800 text-2xl font-black rounded-2xl border border-teal-200">
                       {getInitials(profile.fullName)}
                     </AvatarFallback>
                   </Avatar>
@@ -325,102 +345,129 @@ export default function DoctorProfile() {
                   <Button 
                     size="icon" 
                     variant="secondary" 
-                    className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full bg-white shadow-md hover:bg-slate-100 border border-slate-200"
+                    className="absolute -bottom-1.5 -right-1.5 h-8 w-8 rounded-xl bg-white shadow-md hover:bg-slate-100 border border-slate-300 text-teal-700"
                     disabled={isUploadingPhoto}
                     onClick={() => fileInputRef.current?.click()}
-                    title="Upload profile photo"
+                    title="Upload official clinical portrait"
                   >
-                    <Camera className="h-4 w-4 text-[#606C38]" />
+                    {isUploadingPhoto ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
                   </Button>
                 </div>
 
-                <h3 className="font-bold text-lg text-slate-900">{cleanDisplayDoctorName(profile.fullName)}</h3>
-                <p className="text-xs font-semibold text-slate-500 mt-0.5">{profile.email || "No email registered"}</p>
+                <h3 className="font-extrabold text-base text-slate-900 leading-snug">{cleanDisplayDoctorName(profile.fullName)}</h3>
+                <p className="text-xs font-medium text-slate-500 mt-0.5">{profile.email || "No email registered"}</p>
                 
-                <div className="flex items-center gap-1.5 mt-3 px-3 py-1 bg-emerald-50 rounded-full border border-emerald-200">
-                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-                  <span className="text-[11px] font-bold text-emerald-700">Verified DOH DOTS Physician</span>
+                {profile.license && (
+                  <p className="text-[11px] font-mono font-bold text-teal-800 mt-1">
+                    PRC Lic. #{profile.license}
+                  </p>
+                )}
+
+                <div className="flex items-center gap-1.5 mt-3.5 px-3 py-1 bg-teal-50 rounded-full border border-teal-200">
+                  <ShieldCheck className="h-3.5 w-3.5 text-teal-700" />
+                  <span className="text-[11px] font-bold text-teal-800">Verified DOH DOTS Physician</span>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Clinic Code Sharing Box */}
-            <Card className="rounded-2xl border border-[#DDE5B6] bg-[#FEFAE0]/30 shadow-sm p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] font-bold text-[#606C38] uppercase tracking-wider">{t("clinicCode")}</span>
+            {/* Institutional Clinic Linking Code Box */}
+            <Card className="rounded-2xl border border-teal-200 bg-teal-50/40 shadow-xs p-5 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-teal-900 uppercase tracking-wider">{t("clinicCode")}</span>
                 <Button 
                   size="sm" 
-                  variant="ghost" 
+                  variant="outline" 
                   onClick={copyClinicCode}
-                  className="h-7 text-xs font-bold text-[#606C38] hover:bg-[#FEFAE0]"
+                  className="h-7 text-xs font-bold text-teal-800 bg-white border-teal-200 hover:bg-teal-50 rounded-lg shadow-2xs"
                 >
-                  {copiedCode ? <Check className="h-3.5 w-3.5 mr-1" /> : <Copy className="h-3.5 w-3.5 mr-1" />}
+                  {copiedCode ? <Check className="h-3 w-3 mr-1 text-teal-700" /> : <Copy className="h-3 w-3 mr-1 text-teal-700" />}
                   {copiedCode ? t("copied") : t("copyCode")}
                 </Button>
               </div>
-              <p className="text-2xl font-mono font-black tracking-widest text-[#2D3B1E]">
+              <p className="text-2xl font-mono font-extrabold tracking-widest text-slate-900 pt-1">
                 {profile.clinicCode || "TEREA-DOC"}
               </p>
-              <p className="text-[11px] text-slate-500 mt-2">
-                Patients can enter this code into their TEREA mobile app to instantly link their treatment diary with your clinic.
+              <p className="text-[11px] text-slate-600 leading-relaxed font-normal">
+                Patients enter this linking key in their TEREA mobile companion app to sync their daily adherence logs directly with your clinical workstation.
               </p>
             </Card>
           </div>
 
-          {/* Right Column: Detailed Credential Form */}
-          <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <CardHeader className="border-b border-slate-100 pb-4">
-              <CardTitle className="text-base font-bold text-[#2D3B1E]">{t("personalInfoTitle")}</CardTitle>
+          {/* --- RIGHT COLUMN: DETAILED CREDENTIAL FORM --- */}
+          <Card className="rounded-2xl border border-slate-300/80 bg-white shadow-sm overflow-hidden">
+            <CardHeader className="border-b border-slate-100 pb-4 bg-slate-50/70">
+              <CardTitle className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <FileText className="h-4 w-4 text-teal-700" />
+                {t("personalInfoTitle")}
+              </CardTitle>
               <CardDescription className="text-xs text-slate-500">{t("personalInfoDesc")}</CardDescription>
             </CardHeader>
             <CardContent className="pt-6 space-y-6">
               
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="fullName" className="text-xs font-bold text-slate-600 uppercase">{t("fullName")}</Label>
-                  <Input 
-                    id="fullName" 
-                    value={profile.fullName} 
-                    onChange={(e) => setProfile({ ...profile, fullName: e.target.value })} 
-                    className="rounded-xl border-slate-200 focus-visible:ring-[#606C38] h-11" 
-                  />
+                
+                {/* Full Legal Name */}
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="fullName" className="text-xs font-bold text-slate-700 uppercase tracking-wider">{t("fullName")}</Label>
+                  <div className="relative">
+                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input 
+                      id="fullName" 
+                      value={profile.fullName} 
+                      onChange={(e) => setProfile({ ...profile, fullName: e.target.value })} 
+                      className="rounded-xl border-slate-300 bg-slate-50 text-xs font-semibold text-slate-900 focus-visible:border-teal-700 focus-visible:ring-teal-700 h-10 pl-10" 
+                    />
+                  </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="license" className="text-xs font-bold text-slate-600 uppercase">{t("license")}</Label>
-                  <Input 
-                    id="license" 
-                    placeholder="e.g. 0123456"
-                    value={profile.license} 
-                    onChange={(e) => setProfile({ ...profile, license: e.target.value })} 
-                    className="rounded-xl border-slate-200 focus-visible:ring-[#606C38] h-11 font-mono" 
-                  />
+                {/* PRC License */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="license" className="text-xs font-bold text-slate-700 uppercase tracking-wider">{t("license")}</Label>
+                  <div className="relative">
+                    <ShieldCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input 
+                      id="license" 
+                      placeholder="e.g. 0123456"
+                      value={profile.license} 
+                      onChange={(e) => setProfile({ ...profile, license: e.target.value })} 
+                      className="rounded-xl border-slate-300 bg-slate-50 text-xs font-mono font-bold text-slate-900 focus-visible:border-teal-700 focus-visible:ring-teal-700 h-10 pl-10" 
+                    />
+                  </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="phone" className="text-xs font-bold text-slate-600 uppercase">{t("phone")}</Label>
-                  <Input 
-                    id="phone" 
-                    value={profile.phone} 
-                    onChange={(e) => setProfile({ ...profile, phone: e.target.value })} 
-                    placeholder="e.g. 09171234567"
-                    className="rounded-xl border-slate-200 focus-visible:ring-[#606C38] h-11" 
-                  />
+                {/* Direct Contact */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="phone" className="text-xs font-bold text-slate-700 uppercase tracking-wider">{t("phone")}</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input 
+                      id="phone" 
+                      value={profile.phone} 
+                      onChange={(e) => setProfile({ ...profile, phone: e.target.value })} 
+                      placeholder="e.g. 09171234567"
+                      className="rounded-xl border-slate-300 bg-slate-50 text-xs font-semibold text-slate-900 focus-visible:border-teal-700 focus-visible:ring-teal-700 h-10 pl-10" 
+                    />
+                  </div>
                 </div>
 
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="email" className="text-xs font-bold text-slate-600 uppercase">{t("email")}</Label>
-                  <Input 
-                    id="email" 
-                    type="email" 
-                    value={profile.email} 
-                    onChange={(e) => setProfile({ ...profile, email: e.target.value })} 
-                    className="rounded-xl border-slate-200 focus-visible:ring-[#606C38] h-11" 
-                  />
+                {/* Email Address */}
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="email" className="text-xs font-bold text-slate-700 uppercase tracking-wider">{t("email")}</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input 
+                      id="email" 
+                      type="email" 
+                      value={profile.email} 
+                      onChange={(e) => setProfile({ ...profile, email: e.target.value })} 
+                      className="rounded-xl border-slate-300 bg-slate-50 text-xs font-semibold text-slate-900 focus-visible:border-teal-700 focus-visible:ring-teal-700 h-10 pl-10" 
+                    />
+                  </div>
                 </div>
 
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="clinicName" className="text-xs font-bold text-slate-600 uppercase">{t("clinicName")}</Label>
+                {/* Assigned Health Center Facility */}
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="clinicName" className="text-xs font-bold text-slate-700 uppercase tracking-wider">{t("clinicName")}</Label>
                   <div className="relative">
                     <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     <Input 
@@ -428,47 +475,49 @@ export default function DoctorProfile() {
                       value={profile.clinicName} 
                       onChange={(e) => setProfile({ ...profile, clinicName: e.target.value })} 
                       placeholder="e.g. Carmona Health Center - TB DOTS Clinic"
-                      className="rounded-xl border-slate-200 focus-visible:ring-[#606C38] h-11 pl-10 font-medium" 
+                      className="rounded-xl border-slate-300 bg-slate-50 text-xs font-semibold text-slate-900 focus-visible:border-teal-700 focus-visible:ring-teal-700 h-10 pl-10" 
                     />
                   </div>
                 </div>
               </div>
 
-              {/* Consultation Duty Hours Section */}
+              {/* Consultation & Duty Hours Section */}
               <div className="border-t border-slate-100 pt-5 space-y-3">
                 <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-[#606C38]" />
-                  <span className="text-xs font-bold text-[#2D3B1E] uppercase tracking-wider">{t("consultationHours")}</span>
+                  <Clock className="h-4 w-4 text-teal-700" />
+                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wider">{t("consultationHours")}</span>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-slate-500">{t("startHour")}</Label>
+                    <Label className="text-xs font-bold text-slate-500">{t("startHour")}</Label>
                     <Input 
                       value={profile.startHour}
                       onChange={(e) => setProfile({ ...profile, startHour: e.target.value })}
                       placeholder="e.g. 8:00 AM"
-                      className="rounded-xl h-10 border-slate-200"
+                      className="rounded-xl h-10 border-slate-300 bg-slate-50 text-xs font-semibold text-slate-900 focus-visible:border-teal-700 focus-visible:ring-teal-700"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-slate-500">{t("endHour")}</Label>
+                    <Label className="text-xs font-bold text-slate-500">{t("endHour")}</Label>
                     <Input 
                       value={profile.endHour}
                       onChange={(e) => setProfile({ ...profile, endHour: e.target.value })}
                       placeholder="e.g. 5:00 PM"
-                      className="rounded-xl h-10 border-slate-200"
+                      className="rounded-xl h-10 border-slate-300 bg-slate-50 text-xs font-semibold text-slate-900 focus-visible:border-teal-700 focus-visible:ring-teal-700"
                     />
                   </div>
                 </div>
               </div>
 
+              {/* Bottom Action Button */}
               <div className="pt-2 flex justify-end">
                 <Button 
                   onClick={handleSave} 
                   disabled={isSaving}
-                  className="bg-[#606C38] hover:bg-[#2D3B1E] text-white rounded-xl h-11 px-8 font-bold shadow-sm transition-all disabled:opacity-70"
+                  className="bg-teal-700 hover:bg-teal-800 text-white rounded-xl h-10 px-7 font-bold text-xs shadow-xs transition-all disabled:opacity-70"
                 >
+                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Check className="h-4 w-4 mr-1.5" />}
                   {isSaving ? t("saving") : t("saveChanges")}
                 </Button>
               </div>

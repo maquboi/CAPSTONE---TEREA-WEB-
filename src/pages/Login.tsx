@@ -1,6 +1,19 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Building2, Eye, EyeOff, Loader2, ShieldCheck, Stethoscope, CheckCircle2, X, Headset } from "lucide-react";
+import {
+  ArrowLeft,
+  Building2,
+  Eye,
+  EyeOff,
+  Loader2,
+  ShieldCheck,
+  Stethoscope,
+  CheckCircle2,
+  X,
+  Headset,
+  Lock,
+  AlertCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +34,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  
+
   const [isSuccess, setIsSuccess] = useState(false);
 
   // Support Modal States
@@ -29,7 +42,9 @@ export default function Login() {
   const [supportType, setSupportType] = useState<string>("");
   const [supportEmail, setSupportEmail] = useState("");
   const [supportMessage, setSupportMessage] = useState("");
-  const [supportStatus, setSupportStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [supportStatus, setSupportStatus] = useState<
+    "idle" | "loading" | "success" | "error"
+  >("idle");
   const [supportError, setSupportError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -37,45 +52,50 @@ export default function Login() {
     setError("");
 
     if (!email || !password || !role) {
-      setError("Please fill in all fields");
+      setError("Please fill in all fields.");
       return;
     }
 
     setIsLoading(true);
 
     try {
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { data: authData, error: authError } =
+        await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
 
       if (authError) {
-        throw new Error("Invalid email or password");
+        throw new Error("Invalid email or password.");
       }
 
-      if (!authData.user) throw new Error("User not found");
+      if (!authData.user) throw new Error("User not found.");
 
       const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', authData.user.id)
+        .from("profiles")
+        .select("role")
+        .eq("id", authData.user.id)
         .single();
 
       if (profileError || !profile) {
-        throw new Error("Profile not found. Contact IT support.");
+        throw new Error("Profile record not found. Please contact IT support.");
       }
 
       // 1. GATEKEEPER: Strict Patient Block
       if (profile.role === "patient") {
-        throw new Error("Access Denied: Patients must use the TEREA Mobile App.");
+        throw new Error(
+          "Access Denied: Patients must access their care portal using the TEREA Mobile App."
+        );
       }
 
       if (profile.role !== role) {
-        throw new Error(`This account is not registered as a ${role}.`);
+        throw new Error(
+          `This account is registered with different permissions (not as a ${role}).`
+        );
       }
 
       setIsSuccess(true);
-      
+
       setTimeout(() => {
         if (profile.role === "admin") {
           navigate("/admin/dashboard");
@@ -86,11 +106,10 @@ export default function Login() {
           setIsSuccess(false);
         }
       }, 5000);
-
     } catch (err: any) {
       setError(err.message || "Failed to sign in");
       await supabase.auth.signOut();
-      setIsLoading(false); 
+      setIsLoading(false);
     }
   };
 
@@ -100,19 +119,19 @@ export default function Login() {
     setSupportError("");
 
     if (!supportEmail || !supportType || !supportMessage) {
-      setSupportError("Please fill in all fields.");
+      setSupportError("Please fill in all required fields.");
       setSupportStatus("error");
       return;
     }
 
     try {
-      const { error } = await supabase
-        .from('support_tickets')
-        .insert([{ 
-          email: supportEmail, 
-          issue_type: supportType, 
-          message: supportMessage 
-        }]);
+      const { error } = await supabase.from("support_tickets").insert([
+        {
+          email: supportEmail,
+          issue_type: supportType,
+          message: supportMessage,
+        },
+      ]);
 
       if (error) throw error;
 
@@ -125,7 +144,7 @@ export default function Login() {
         setSupportType("");
       }, 4000);
     } catch (err: any) {
-      setSupportError(err.message || "Failed to send request.");
+      setSupportError(err.message || "Failed to submit request.");
       setSupportStatus("error");
     }
   };
@@ -137,124 +156,176 @@ export default function Login() {
   };
 
   return (
-    <div className="auth-shell relative flex min-h-screen overflow-hidden bg-[#F4F7F4]">
-      <div className="auth-ambient auth-blob-one" aria-hidden="true" />
-      <div className="auth-ambient auth-blob-two" aria-hidden="true" />
-
+    <div className="relative flex min-h-screen overflow-hidden bg-[#F1F5F9] font-sans text-slate-900 selection:bg-teal-100 selection:text-teal-900">
+      {/* LEFT COLUMN: Carmona Health Center Photo Showcase */}
       <div
-        className="relative hidden lg:flex lg:w-[52%] bg-cover bg-center"
+        className="relative hidden lg:flex lg:w-[50%] bg-cover bg-center"
         style={{
           backgroundImage: "url('/CarmonaHealthBarangay.jpg')",
-          backgroundColor: "#DDE5B6"
+          backgroundColor: "#042F2E",
         }}
       >
-        <div className="absolute inset-0 bg-gradient-to-br from-[#2D3B1E]/90 via-[#2D3B1E]/74 to-[#606C38]/70" />
+        {/* Layered Deep Clinical Gradient Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-[#042F2E]/92 via-[#042F2E]/80 to-[#0F766E]/70 backdrop-blur-[1px]" />
 
-        <div className="relative z-10 flex w-full flex-col justify-between p-11 xl:p-14">
+        <div className="relative z-10 flex w-full flex-col justify-between p-12 xl:p-16">
           <div className="space-y-8">
+            {/* Header Brand */}
             <div className="flex flex-col items-start">
-              <img src="/LogoNoBG.png" alt="TEREA Logo" className="h-12 w-12 mb-3 object-contain drop-shadow-md" />
-              <h1 className="text-2xl font-bold tracking-tight text-white">TEREA</h1>
-              <p className="text-xs font-semibold tracking-[0.14em] text-[#DDE5B6]">TB RISK ASSESSMENT PLATFORM</p>
+              <div className="flex items-center gap-3 mb-2">
+                <img
+                  src="/LogoNoBG.png"
+                  alt="TEREA Logo"
+                  className="h-10 w-10 object-contain drop-shadow-md"
+                />
+                <span className="text-2xl font-extrabold tracking-tight text-white">
+                  TEREA
+                </span>
+              </div>
+              <span className="inline-block rounded-md bg-white/15 px-2.5 py-0.5 text-[11px] font-bold tracking-wider text-teal-100 uppercase backdrop-blur-xs">
+                Clinical Care & Triage Platform
+              </span>
             </div>
 
-            <div className="space-y-4">
-              <h2 className="text-[2.6rem] font-extrabold leading-[1.05] tracking-[-0.03em] text-white xl:text-5xl">
-                Secure clinical access for faster TB response.
+            {/* Headline */}
+            <div className="space-y-4 pt-4">
+              <h2 className="text-3xl font-extrabold leading-[1.15] tracking-tight text-white xl:text-4xl">
+                Secure clinical portal for tuberculosis care coordination.
               </h2>
-              <p className="max-w-lg text-base leading-relaxed text-white/85">
-                Unified sign-in for care teams managing assessments, follow-ups, and patient risk alerts in Carmona.
+              <p className="max-w-lg text-base leading-relaxed text-slate-200 font-normal">
+                Unified workstation for authorized doctors, healthcare workers, and clinic administrators managing patient cohorts in Carmona.
               </p>
             </div>
 
-            <div className="grid max-w-xl gap-3 sm:grid-cols-2">
-              <div className="auth-info-card">
-                <ShieldCheck className="h-5 w-5 text-[#DDE5B6]" />
-                <span>Clinical Workflow</span>
+            {/* Feature Pills */}
+            <div className="grid max-w-lg gap-3 sm:grid-cols-2 pt-2">
+              <div className="flex items-center gap-3 rounded-xl border border-white/20 bg-white/10 p-3.5 text-xs font-semibold text-white backdrop-blur-md shadow-xs">
+                <ShieldCheck className="h-5 w-5 text-teal-300 shrink-0" />
+                <span>Patient Triage Queue</span>
               </div>
-              <div className="auth-info-card">
-                <Stethoscope className="h-5 w-5 text-[#DDE5B6]" />
-                <span>Doctor workflow</span>
+              <div className="flex items-center gap-3 rounded-xl border border-white/20 bg-white/10 p-3.5 text-xs font-semibold text-white backdrop-blur-md shadow-xs">
+                <Stethoscope className="h-5 w-5 text-teal-300 shrink-0" />
+                <span>Adherence Surveillance</span>
               </div>
-              <div className="auth-info-card sm:col-span-2">
-                <Building2 className="h-5 w-5 text-[#DDE5B6]" />
-                <span>Municipality of Carmona</span>
+              <div className="flex items-center gap-3 rounded-xl border border-white/20 bg-white/10 p-3.5 text-xs font-semibold text-white backdrop-blur-md shadow-xs sm:col-span-2">
+                <Building2 className="h-5 w-5 text-teal-300 shrink-0" />
+                <span>Carmona Health Center Network</span>
               </div>
             </div>
           </div>
 
-          <p className="border-t border-white/15 pt-5 text-xs tracking-wide text-white/70">
-            © 2026 TEREA. Municipality of Carmona Health Office.
+          <p className="border-t border-white/15 pt-6 text-xs text-slate-300">
+            © 2026 TEREA • City Government of Carmona Healthcare System
           </p>
         </div>
       </div>
 
-      <div className="relative z-10 flex flex-1 items-center justify-center p-5 sm:p-9 lg:p-12">
-        <div className="auth-form-card w-full max-w-[500px] space-y-7 rounded-[2rem] p-6 sm:p-8 md:p-10">
+      {/* RIGHT COLUMN: Sign In Form with Makapal na Shadows */}
+      <div className="relative z-10 flex flex-1 items-center justify-center p-5 sm:p-10 lg:p-12">
+        <div className="w-full max-w-[480px] space-y-7 rounded-2xl border border-slate-300/80 bg-white p-7 sm:p-10 shadow-[0_20px_50px_rgba(15,23,42,0.12)]">
+          {/* Navigation Back Button */}
           <div className="flex items-center justify-between">
             <button
               type="button"
               onClick={() => navigate("/")}
-              className="inline-flex items-center gap-2 rounded-lg border border-[#606C38]/30 bg-[#DDE5B6]/35 px-3 py-1.5 text-sm font-semibold text-[#2D3B1E] transition-all hover:border-[#606C38] hover:bg-[#DDE5B6]/60"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
             >
-              <ArrowLeft className="h-4 w-4" />
-              Back
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to Home
             </button>
+            <span className="text-[11px] font-semibold text-slate-400">
+              Portal v1.0
+            </span>
           </div>
 
-          <div className="lg:hidden flex flex-col items-center text-center">
-            <img src="/LogoNoBG.png" alt="TEREA Logo" className="h-12 w-12 mb-2 object-contain drop-shadow-sm" />
-            <h1 className="text-2xl font-bold tracking-tight text-[#2D3B1E]">TEREA</h1>
-            <p className="text-xs font-semibold tracking-wider text-[#606C38]">RISK ASSESSMENT</p>
+          {/* Small Screen Logo Header */}
+          <div className="lg:hidden flex flex-col items-center text-center pt-2">
+            <img
+              src="/LogoNoBG.png"
+              alt="TEREA Logo"
+              className="h-10 w-10 mb-1 object-contain drop-shadow-xs"
+            />
+            <h1 className="text-xl font-bold text-slate-900">TEREA</h1>
+            <p className="text-[10px] font-bold text-teal-700 tracking-wider uppercase">
+              Clinical Triage Platform
+            </p>
           </div>
 
-          <div className="space-y-2 text-center lg:text-left">
-            <h2 className="text-3xl font-extrabold tracking-[-0.02em] text-[#2D3B1E]">Welcome back</h2>
-            <p className="text-sm font-medium text-slate-500">Sign in to continue to your staff portal</p>
+          {/* Title Area */}
+          <div className="space-y-1 text-center lg:text-left">
+            <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
+              Log in
+            </h2>
+            <p className="text-xs text-slate-500 font-normal">
+              Enter your authorized staff credentials to access patient records.
+            </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="flex items-center rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-600">
-                <div className="mr-3 shrink-0 rounded-full bg-red-100 p-1.5">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-                </div>
-                {error}
+              <div className="flex items-start rounded-xl border border-red-200 bg-red-50 p-3.5 text-xs font-medium text-red-700">
+                <AlertCircle className="mr-2.5 h-4 w-4 shrink-0 text-red-600 mt-0.5" />
+                <span>{error}</span>
               </div>
             )}
 
-            <div className="space-y-2.5">
-              <Label htmlFor="role" className="text-xs font-bold uppercase tracking-wide text-[#2D3B1E]">Sign in as</Label>
+            {/* 1. Role Selection */}
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="role"
+                className="text-[11px] font-bold uppercase tracking-wider text-slate-600"
+              >
+                Access Role
+              </Label>
               <Select value={role} onValueChange={setRole}>
-                <SelectTrigger id="role" className="h-12 rounded-xl border-[#606C38]/20 bg-[#F4F7F4] text-slate-700 transition-all focus:border-[#606C38] focus:ring-[#606C38]">
-                  <SelectValue placeholder="Select your role" />
+                <SelectTrigger
+                  id="role"
+                  className="h-11 rounded-xl border-slate-300 bg-slate-50/70 text-slate-800 transition-all focus:border-teal-700 focus:ring-teal-700"
+                >
+                  <SelectValue placeholder="Select authorization role" />
                 </SelectTrigger>
-                <SelectContent className="rounded-xl border-slate-200 shadow-lg">
-                  <SelectItem value="admin" className="cursor-pointer">Administrator</SelectItem>
-                  <SelectItem value="doctor" className="cursor-pointer">Doctor / Employee</SelectItem>
+                <SelectContent className="rounded-xl border-slate-200 shadow-xl bg-white">
+                  <SelectItem value="doctor" className="cursor-pointer font-medium">
+                    Attending Physician / Health Worker
+                  </SelectItem>
+                  <SelectItem value="admin" className="cursor-pointer font-medium">
+                    System Administrator
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="space-y-2.5">
-              <Label htmlFor="email" className="text-xs font-bold uppercase tracking-wide text-[#2D3B1E]">Email address</Label>
+            {/* 2. Email Address */}
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="email"
+                className="text-[11px] font-bold uppercase tracking-wider text-slate-600"
+              >
+                Staff Email Address
+              </Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="name@carmona.gov.ph"
+                placeholder="clinician@carmona.gov.ph"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="h-12 rounded-xl border-[#606C38]/20 bg-[#F4F7F4] text-slate-700 placeholder:text-slate-400 transition-all focus-visible:border-[#606C38] focus-visible:ring-[#606C38]"
+                className="h-11 rounded-xl border-slate-300 bg-slate-50/70 text-slate-800 placeholder:text-slate-400 transition-all focus-visible:border-teal-700 focus-visible:ring-teal-700"
               />
             </div>
 
-            <div className="space-y-2.5">
+            {/* 3. Password */}
+            <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <Label htmlFor="password" className="text-xs font-bold uppercase tracking-wide text-[#2D3B1E]">Password</Label>
+                <Label
+                  htmlFor="password"
+                  className="text-[11px] font-bold uppercase tracking-wider text-slate-600"
+                >
+                  Password
+                </Label>
                 <button
                   type="button"
                   onClick={() => openSupportModal("Password Reset Request")}
-                  className="text-xs font-semibold text-[#606C38] transition-colors hover:text-[#2D3B1E]"
+                  className="text-xs font-semibold text-teal-700 transition-colors hover:text-teal-900"
                 >
                   Forgot password?
                 </button>
@@ -263,178 +334,213 @@ export default function Login() {
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="Enter your password"
+                  placeholder="Enter password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-12 rounded-xl border-[#606C38]/20 bg-[#F4F7F4] pr-10 text-slate-700 placeholder:text-slate-400 transition-all focus-visible:border-[#606C38] focus-visible:ring-[#606C38]"
+                  className="h-11 rounded-xl border-slate-300 bg-slate-50/70 pr-10 text-slate-800 placeholder:text-slate-400 transition-all focus-visible:border-teal-700 focus-visible:ring-teal-700"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-[#606C38]"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600"
+                  tabIndex={-1}
                 >
                   {showPassword ? (
-                    <EyeOff className="h-5 w-5" />
+                    <EyeOff className="h-4 w-4" />
                   ) : (
-                    <Eye className="h-5 w-5" />
+                    <Eye className="h-4 w-4" />
                   )}
                 </button>
               </div>
             </div>
 
+            {/* Submit Button */}
             <Button
               type="submit"
-              className="btn-premium mt-6 h-12 w-full rounded-xl bg-[#606C38] text-sm font-bold text-white shadow-sm hover:bg-[#4A5529]"
+              className="mt-3 h-11 w-full rounded-xl bg-teal-700 text-sm font-bold text-white shadow-md hover:bg-teal-800 transition-all hover:shadow-lg"
               disabled={isLoading || isSuccess}
             >
               {isLoading && !isSuccess ? (
                 <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Authenticating...
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Verifying Credentials...
                 </>
               ) : isSuccess ? (
-                "Success!"
+                "Verified"
               ) : (
-                "Sign In"
+                <>
+                  <Lock className="mr-1.5 h-4 w-4" /> Sign In
+                </>
               )}
             </Button>
           </form>
 
-          <div className="border-t border-[#606C38]/15 pt-5 text-center">
-            <p className="text-sm text-slate-500">
-              Need access?{" "}
-              <button 
+          {/* IT Support Contact Footer */}
+          <div className="border-t border-slate-200 pt-4 text-center">
+            <p className="text-xs text-slate-500">
+              Need staff authorization?{" "}
+              <button
                 type="button"
                 onClick={() => openSupportModal("General IT Support")}
-                className="font-semibold text-[#606C38] transition-colors hover:text-[#2D3B1E]"
+                className="font-bold text-teal-700 hover:text-teal-900 transition-colors"
               >
-                Contact IT Support
+                Contact Health IT Support
               </button>
             </p>
           </div>
         </div>
       </div>
 
-      {/* Centered Success Overlay Notification */}
-      <div 
-        className={`fixed inset-0 z-[100] flex items-center justify-center bg-white/40 backdrop-blur-sm transition-all duration-500 ease-out ${
+      {/* SUCCESS OVERLAY NOTIFICATION */}
+      <div
+        className={`fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-xs transition-all duration-300 ${
           isSuccess ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"
         }`}
       >
-        <div 
-          className={`flex flex-col items-center gap-4 rounded-3xl border border-[#606C38]/10 bg-white p-10 text-center shadow-[0_20px_60px_rgba(45,59,30,0.15)] transition-all duration-700 ease-out ${
-            isSuccess ? "scale-100 translate-y-0" : "scale-90 translate-y-8"
+        <div
+          className={`flex flex-col items-center gap-3.5 rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-[0_25px_60px_rgba(0,0,0,0.2)] transition-all duration-500 ${
+            isSuccess ? "scale-100 translate-y-0" : "scale-95 translate-y-4"
           }`}
         >
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#DDE5B6]/40">
-            <CheckCircle2 className="h-10 w-10 text-[#606C38]" />
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-teal-50 border border-teal-200">
+            <CheckCircle2 className="h-8 w-8 text-teal-700" />
           </div>
           <div>
-            <h3 className="text-2xl font-extrabold text-[#2D3B1E]">Login Successful</h3>
-            <p className="mt-2 text-sm font-medium text-slate-500">
-              Securely redirecting to your portal...
+            <h3 className="text-xl font-bold text-slate-900">
+              Authorization Confirmed
+            </h3>
+            <p className="mt-1 text-xs text-slate-500 max-w-xs">
+              Redirecting to your clinical workstation...
             </p>
           </div>
-          
-          <div className="mt-4 flex gap-1.5">
-            <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-[#606C38]" style={{ animationDelay: "0ms" }}></span>
-            <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-[#606C38]" style={{ animationDelay: "150ms" }}></span>
-            <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-[#606C38]" style={{ animationDelay: "300ms" }}></span>
+
+          <div className="mt-2 flex gap-1.5">
+            <span className="h-2 w-2 animate-bounce rounded-full bg-teal-700" style={{ animationDelay: "0ms" }}></span>
+            <span className="h-2 w-2 animate-bounce rounded-full bg-teal-700" style={{ animationDelay: "150ms" }}></span>
+            <span className="h-2 w-2 animate-bounce rounded-full bg-teal-700" style={{ animationDelay: "300ms" }}></span>
           </div>
         </div>
       </div>
 
-      {/* IT Support / Password Reset Modal */}
-      <div 
-        className={`fixed inset-0 z-[110] flex items-center justify-center bg-black/30 backdrop-blur-sm transition-all duration-300 ${
+      {/* IT SUPPORT MODAL */}
+      <div
+        className={`fixed inset-0 z-[110] flex items-center justify-center bg-black/40 backdrop-blur-xs transition-all duration-300 p-4 ${
           isSupportModalOpen ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"
         }`}
       >
-        <div 
-          className={`w-full max-w-md bg-white rounded-3xl shadow-xl transition-all duration-500 ease-out ${
+        <div
+          className={`w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-2xl transition-all duration-400 ${
             isSupportModalOpen ? "scale-100 translate-y-0" : "scale-95 translate-y-4"
           }`}
         >
-          <div className="flex items-center justify-between border-b border-slate-100 p-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#DDE5B6]/30">
-                <Headset className="h-5 w-5 text-[#606C38]" />
+          <div className="flex items-center justify-between border-b border-slate-100 p-5">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-50 border border-teal-200">
+                <Headset className="h-4 w-4 text-teal-700" />
               </div>
-              <h3 className="text-lg font-bold text-[#2D3B1E]">IT Support Desk</h3>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">
+                  Carmona Health IT Support
+                </h3>
+                <p className="text-[10px] text-slate-500">
+                  Administrative technical ticket
+                </p>
+              </div>
             </div>
-            <button 
+            <button
               onClick={() => setIsSupportModalOpen(false)}
-              className="text-slate-400 hover:text-slate-600 transition-colors"
+              className="text-slate-400 hover:text-slate-600 transition-colors p-1"
             >
               <X className="h-5 w-5" />
             </button>
           </div>
 
-          <div className="p-6">
+          <div className="p-5">
             {supportStatus === "success" ? (
-              <div className="py-8 text-center space-y-4 animate-fade-in">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-50">
-                  <CheckCircle2 className="h-8 w-8 text-green-600" />
+              <div className="py-6 text-center space-y-3">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 border border-emerald-200">
+                  <CheckCircle2 className="h-7 w-7 text-emerald-600" />
                 </div>
                 <div>
-                  <h4 className="text-xl font-bold text-[#2D3B1E]">Ticket Submitted</h4>
-                  <p className="mt-2 text-sm text-slate-500">
-                    Your request has been sent to the system administrator. Please wait for an email with further instructions.
+                  <h4 className="text-base font-bold text-slate-900">
+                    Ticket Submitted Successfully
+                  </h4>
+                  <p className="mt-1 text-xs text-slate-500 max-w-xs mx-auto">
+                    Your request has been forwarded to the IT administrator. Instructions will be sent to your email.
                   </p>
                 </div>
               </div>
             ) : (
-              <form onSubmit={handleSupportSubmit} className="space-y-5">
+              <form onSubmit={handleSupportSubmit} className="space-y-3.5">
                 {supportError && (
-                  <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 border border-red-100">
-                    {supportError}
+                  <div className="rounded-lg bg-red-50 p-2.5 text-xs text-red-700 border border-red-200 flex items-center gap-2">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                    <span>{supportError}</span>
                   </div>
                 )}
-                
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase tracking-wide text-[#2D3B1E]">Issue Type</Label>
+
+                <div className="space-y-1">
+                  <Label className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                    Issue Category
+                  </Label>
                   <Select value={supportType} onValueChange={setSupportType}>
-                    <SelectTrigger className="h-11 rounded-xl bg-slate-50 border-slate-200">
+                    <SelectTrigger className="h-10 rounded-xl bg-slate-50 border-slate-300 text-xs text-slate-800">
                       <SelectValue placeholder="Select issue type" />
                     </SelectTrigger>
-                    <SelectContent className="rounded-xl border-slate-200">
-                      <SelectItem value="Password Reset Request">Password Reset Request</SelectItem>
-                      <SelectItem value="Account Locked">Account Locked</SelectItem>
-                      <SelectItem value="System Bug">System Bug / Glitch</SelectItem>
-                      <SelectItem value="General IT Support">General IT Support</SelectItem>
+                    <SelectContent className="rounded-xl border-slate-200 bg-white">
+                      <SelectItem value="Password Reset Request" className="text-xs">
+                        Password Reset Request
+                      </SelectItem>
+                      <SelectItem value="Account Locked" className="text-xs">
+                        Account Locked
+                      </SelectItem>
+                      <SelectItem value="System Bug" className="text-xs">
+                        System Bug / Clinical Data Sync
+                      </SelectItem>
+                      <SelectItem value="General IT Support" className="text-xs">
+                        General Technical Support
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase tracking-wide text-[#2D3B1E]">Your Email</Label>
+                <div className="space-y-1">
+                  <Label className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                    Staff Email
+                  </Label>
                   <Input
                     type="email"
                     placeholder="name@carmona.gov.ph"
                     value={supportEmail}
                     onChange={(e) => setSupportEmail(e.target.value)}
-                    className="h-11 rounded-xl bg-slate-50 border-slate-200 focus-visible:border-[#606C38] focus-visible:ring-[#606C38]"
+                    className="h-10 rounded-xl bg-slate-50 border-slate-300 text-xs text-slate-800 focus-visible:border-teal-700 focus-visible:ring-teal-700"
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase tracking-wide text-[#2D3B1E]">Message / Details</Label>
+                <div className="space-y-1">
+                  <Label className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                    Inquiry Details
+                  </Label>
                   <textarea
-                    placeholder="Please describe the issue..."
+                    placeholder="Please specify details regarding your account issue..."
                     value={supportMessage}
                     onChange={(e) => setSupportMessage(e.target.value)}
-                    className="w-full min-h-[100px] rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#606C38] focus:border-transparent transition-all resize-none"
+                    className="w-full min-h-[90px] rounded-xl border border-slate-300 bg-slate-50 p-2.5 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-700 focus:border-teal-700 transition-all resize-none"
                   />
                 </div>
 
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   disabled={supportStatus === "loading"}
-                  className="w-full h-11 rounded-xl bg-[#606C38] hover:bg-[#4A5529] font-bold text-white transition-colors"
+                  className="w-full h-10 rounded-xl bg-teal-700 hover:bg-teal-800 font-bold text-xs text-white shadow-xs transition-colors"
                 >
                   {supportStatus === "loading" ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>
-                  ) : "Send Support Request"}
+                    <>
+                      <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> Submitting...
+                    </>
+                  ) : (
+                    "Submit Support Ticket"
+                  )}
                 </Button>
               </form>
             )}
