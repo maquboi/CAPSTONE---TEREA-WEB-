@@ -19,10 +19,29 @@ import {
   QrCode,
   RefreshCw,
   Calendar,
-  Loader2
 } from "lucide-react";
 import { useLanguage } from "../admin/LanguageContext";
 import { QRCodeSVG } from "qrcode.react";
+
+// Helper to strip XSS script tags and HTML entities
+const sanitizeText = (input: string | null | undefined): string => {
+  if (!input) return "";
+  return input
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/<[^>]*>/g, "")
+    .trim();
+};
+
+// Helper to convert 24-hour time strings (e.g. "05:00" or "19:45") inside text to 12-hour AM/PM
+const format24HrInTextTo12Hr = (text: string | null | undefined): string => {
+  if (!text) return "";
+  return text.replace(/\b([01]?\d|2[0-3]):([0-5]\d)(?!\s*(?:AM|PM|am|pm))\b/g, (_, hStr, mStr) => {
+    const h = parseInt(hStr, 10);
+    const ampm = h >= 12 ? "PM" : "AM";
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${h12}:${mStr} ${ampm}`;
+  });
+};
 
 const translations = {
   en: {
@@ -34,7 +53,7 @@ const translations = {
     clinicalCode: "Clinic Handshake Code",
     copy: "Copy",
     copied: "Copied",
-    codeCopiedTitle: "Clinic Code Copied",
+    codeCopiedTitle: "Clinic Handshake Code Copied",
     codeCopiedDesc: "Share this code with your patient to connect their mobile app:",
     myPatients: "Active Caseload",
     priorityQueue: "Priority Review Queue",
@@ -58,7 +77,7 @@ const translations = {
     clinicalCode: "Clinic Handshake Code",
     copy: "Kopyahin",
     copied: "Nakopya",
-    codeCopiedTitle: "Nakopya ang Clinic Code",
+    codeCopiedTitle: "Nakopya ang Clinic Handshake Code",
     codeCopiedDesc: "Ibahagi ang code na ito sa pasyente upang maikonekta ang kanilang mobile app:",
     myPatients: "Aktibong Pasyente",
     priorityQueue: "Pila ng Prayoridad",
@@ -136,15 +155,25 @@ export default function DoctorDashboard() {
     try {
       const { data: connections, error } = await supabase
         .from("connections")
-        .select("patient_id, status, profiles!fk_patient (risk_level)")
+        .select("patient_id, status, is_archived, profiles!fk_patient (risk_level, status, is_archived)")
         .eq("doctor_id", userId);
 
       if (error) throw error;
 
       if (connections) {
         const uniqueActive = new Set();
-        const active = connections.filter((c) => {
-          if (c.status === "active") {
+        const active = connections.filter((c: any) => {
+          const profile = Array.isArray(c.profiles) ? c.profiles[0] : c.profiles;
+          const pStatus = profile?.status?.toLowerCase() || "";
+          const isDischarged =
+            c.is_archived ||
+            profile?.is_archived ||
+            pStatus === "cured" ||
+            pStatus === "completed" ||
+            pStatus === "treatment_completed" ||
+            pStatus === "discharged";
+
+          if (c.status === "active" && !isDischarged) {
             if (uniqueActive.has(c.patient_id)) return false;
             uniqueActive.add(c.patient_id);
             return true;
@@ -153,8 +182,8 @@ export default function DoctorDashboard() {
         });
 
         const uniquePending = new Set();
-        const pendingCount = connections.filter((c) => {
-          if (c.status === "pending") {
+        const pendingCount = connections.filter((c: any) => {
+          if (c.status === "pending" && !c.is_archived) {
             if (uniquePending.has(c.patient_id)) return false;
             uniquePending.add(c.patient_id);
             return true;
@@ -163,7 +192,7 @@ export default function DoctorDashboard() {
         }).length;
 
         const activeCount = active.length;
-        const highRiskCount = active.filter((c) => {
+        const highRiskCount = active.filter((c: any) => {
           const profile = Array.isArray(c.profiles) ? c.profiles[0] : c.profiles;
           const risk = profile?.risk_level?.toLowerCase() || "";
           return (
@@ -191,10 +220,27 @@ export default function DoctorDashboard() {
         .select("*")
         .eq("doctor_id", userId)
         .order("timestamp", { ascending: false })
-        .limit(5);
+        .limit(10);
 
       if (error) throw error;
-      setRecentActivities(data || []);
+
+      const cleaned = (data || [])
+        .filter((item) => {
+          const combined = `${item.action || ""} ${item.patient || ""} ${item.details || ""}`.toLowerCase();
+          return !combined.includes("dsfvdscfsddsdsfasfsd");
+        })
+        .slice(0, 5)
+        .map((item) => ({
+          ...item,
+          action: sanitizeText(item.action),
+          patient:
+            !item.patient || item.patient === "N/A" || sanitizeText(item.patient) === ""
+              ? "—"
+              : sanitizeText(item.patient),
+          details: format24HrInTextTo12Hr(sanitizeText(item.details)),
+        }));
+
+      setRecentActivities(cleaned);
     } catch (err) {
       console.error("Activity Fetch Error:", err);
     }
@@ -235,7 +281,7 @@ export default function DoctorDashboard() {
         return;
       }
 
-      const fullName = profile?.full_name || "Doctor";
+      const fullName = sanitizeText(profile?.full_name) || "Doctor";
       const code = profile?.clinic_code || user.id.slice(0, 8).toUpperCase();
 
       setDoctorData({ name: fullName, id: user.id, clinicCode: code });
@@ -325,12 +371,13 @@ export default function DoctorDashboard() {
     }
   };
 
-  const cleanDocName = doctorData.name
-    ? `Dr. ${doctorData.name.replace(/^(dr\.?\s*)+/i, "").trim()}`
+  const sanitizedDocName = sanitizeText(doctorData.name);
+  const cleanDocName = sanitizedDocName
+    ? `Dr. ${sanitizedDocName.replace(/^(dr\.?\s*)+/i, "").trim()}`
     : "Dr. Attending Physician";
 
   return (
-    <DashboardLayout role="doctor" userName={doctorData.name}>
+    <DashboardLayout role="doctor" userName={sanitizedDocName || "Doctor"}>
       {/* Centralized Notification Modal */}
       <Dialog open={alert.open} onOpenChange={(open) => setAlert({ ...alert, open })}>
         <DialogPortal>
@@ -400,7 +447,6 @@ export default function DoctorDashboard() {
       </Dialog>
 
       <div className="space-y-6">
-        
         {/* --- CLINICAL DESK COMMAND HEADER --- */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-5 bg-white p-6 rounded-2xl border border-slate-200/90 shadow-xs">
           <div className="space-y-1.5">
@@ -518,7 +564,6 @@ export default function DoctorDashboard() {
             <RecentActivityCard activities={recentActivities} />
           </div>
         </div>
-
       </div>
     </DashboardLayout>
   );

@@ -2,7 +2,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Clock, Activity, ArrowRight, ShieldCheck, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-// 1. Define the shape of a single activity log
 interface ActivityLog {
   id: string | number;
   action: string;
@@ -11,10 +10,19 @@ interface ActivityLog {
   timestamp: string;
 }
 
-// 2. Define the props the component receives
 interface RecentActivityCardProps {
   activities: ActivityLog[];
 }
+
+const format24HrInTextTo12Hr = (text: string | null | undefined): string => {
+  if (!text) return "";
+  return text.replace(/\b([01]?\d|2[0-3]):([0-5]\d)(?!\s*(?:AM|PM|am|pm))\b/g, (_, hStr, mStr) => {
+    const h = parseInt(hStr, 10);
+    const ampm = h >= 12 ? "PM" : "AM";
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${h12}:${mStr} ${ampm}`;
+  });
+};
 
 export function RecentActivityCard({ activities }: RecentActivityCardProps) {
   const navigate = useNavigate();
@@ -42,6 +50,8 @@ export function RecentActivityCard({ activities }: RecentActivityCardProps) {
           <div className="space-y-4">
             {activities.map((log, index) => {
               const isLast = index === activities.length - 1;
+              const formattedDetails = format24HrInTextTo12Hr(log.details);
+              const isBlankPatient = !log.patient || log.patient === "N/A" || log.patient === "—";
 
               return (
                 <div key={log.id} className="relative flex gap-3.5 group">
@@ -53,7 +63,7 @@ export function RecentActivityCard({ activities }: RecentActivityCardProps) {
                     )}
                   </div>
 
-                  {/* Content Container */}
+                  {/* Content Container (Full text viewable with hover tooltip) */}
                   <div className={`flex-1 ${!isLast ? 'pb-3.5' : 'pb-1'}`}>
                     <div className="flex items-baseline justify-between gap-2">
                       <p className="text-xs font-bold text-slate-900 leading-snug group-hover:text-teal-800 transition-colors">
@@ -64,7 +74,7 @@ export function RecentActivityCard({ activities }: RecentActivityCardProps) {
                         <Clock className="h-2.5 w-2.5" />
                         {new Date(log.timestamp).toLocaleTimeString([], { 
                           hour: 'numeric', 
-                          minute: '2-digit',
+                          minute: '2-digit', 
                           hour12: true 
                         })}
                       </div>
@@ -73,13 +83,16 @@ export function RecentActivityCard({ activities }: RecentActivityCardProps) {
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200/70">
                         <User className="h-2.5 w-2.5 text-teal-700" />
-                        {log.patient || "General Clinic"}
+                        {isBlankPatient ? "General Clinic" : log.patient}
                       </span>
                     </div>
 
-                    {log.details && (
-                      <p className="text-[11px] text-slate-500 mt-1 line-clamp-1 leading-relaxed">
-                        {log.details}
+                    {formattedDetails && (
+                      <p 
+                        className="text-[11px] text-slate-600 mt-1 leading-relaxed break-words"
+                        title={formattedDetails}
+                      >
+                        {formattedDetails}
                       </p>
                     )}
                   </div>

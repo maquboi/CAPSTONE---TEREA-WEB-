@@ -14,7 +14,6 @@ import {
   TableHeader,
 } from "@/components/ui/table";
 import { 
-  User, 
   ArrowRight, 
   Check, 
   X, 
@@ -24,13 +23,24 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Inbox
+  Inbox,
+  AlertTriangle,
+  ChevronRight
 } from "lucide-react";
 import { sendNotificationToPatient } from "@/lib/notifications";
 
+const sanitizeText = (input: string | null | undefined): string => {
+  if (!input) return "";
+  return input
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/<[^>]*>/g, "")
+    .trim();
+};
+
 const getInitials = (name: string = "") => {
-  if (!name.trim()) return "PT";
-  const parts = name.trim().split(/\s+/);
+  const clean = sanitizeText(name);
+  if (!clean) return "PT";
+  const parts = clean.split(/\s+/);
   if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
@@ -44,8 +54,11 @@ const getRiskColor = (level: string = "") => {
 
 export function PatientQueueTable({ search = "", riskFilter = "all", statusFilter = "all" }: { search?: string; riskFilter?: string; statusFilter?: string }) {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'pending' | 'active'>('pending');
+  // Three clearly differentiated tabs
+  const [activeTab, setActiveTab] = useState<'priority' | 'pending' | 'active'>('priority');
   const [pendingList, setPendingList] = useState<any[]>([]);
+  const [priorityList, setPriorityList] = useState<any[]>([]);
+  const [totalPriorityCount, setTotalPriorityCount] = useState<number>(0);
   const [activeList, setActiveList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -68,11 +81,14 @@ export function PatientQueueTable({ search = "", riskFilter = "all", statusFilte
           status,
           created_at,
           patient_id,
+          is_archived,
           profiles!fk_patient (
             id,
             full_name,
             risk_level,
-            avatar_url
+            avatar_url,
+            status,
+            is_archived
           )
         `)
         .eq('doctor_id', user.id);
@@ -80,35 +96,38 @@ export function PatientQueueTable({ search = "", riskFilter = "all", statusFilte
       if (error) throw error;
 
       if (data) {
-        // Filter and sort Pending Requests (Most recent first, Max 5)
+        // 1. Pending verification requests
         const pending = data
-          .filter(d => d.status === 'pending')
-          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-          .slice(0, 5);
+          .filter(d => d.status === 'pending' && !d.is_archived)
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         
-        // Filter and sort Active Patients (High Risk first, then recent, Max 5)
-        const active = data
-          .filter(d => d.status === 'active')
-          .sort((a, b) => {
-            const profileA = Array.isArray(a.profiles) ? a.profiles[0] : a.profiles;
-            const profileB = Array.isArray(b.profiles) ? b.profiles[0] : b.profiles;
-            const riskA = profileA?.risk_level?.toLowerCase() || '';
-            const riskB = profileB?.risk_level?.toLowerCase() || '';
-            
-            if (riskA.includes('high') && !riskB.includes('high')) return -1;
-            if (!riskA.includes('high') && riskB.includes('high')) return 1;
-            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-          })
-          .slice(0, 5);
+        // 2. Active patients who are NOT discharged
+        const active = data.filter(d => {
+          const profile = Array.isArray(d.profiles) ? d.profiles[0] : d.profiles;
+          const pStatus = profile?.status?.toLowerCase() || "";
+          const isDischarged = d.is_archived || profile?.is_archived || pStatus === "cured" || pStatus === "completed" || pStatus === "treatment_completed" || pStatus === "discharged";
+          return d.status === 'active' && !isDischarged;
+        });
 
-        setPendingList(pending);
-        setActiveList(active);
+        // 3. Priority cases: High risk / adverse cases
+        const highRiskPatients = active.filter(d => {
+          const profile = Array.isArray(d.profiles) ? d.profiles[0] : d.profiles;
+          const risk = profile?.risk_level?.toLowerCase() || "";
+          return risk.includes("high") || risk.includes("priority") || risk.includes("mataas");
+        });
 
-        // Auto-switch to active tab if no pending requests exist
-        if (pending.length === 0 && activeTab === 'pending') {
-          setActiveTab('active');
-        } else if (pending.length > 0 && activeTab === 'active' && activeList.length === 0) {
+        setTotalPriorityCount(highRiskPatients.length);
+        setPriorityList(highRiskPatients.slice(0, 5));
+        setPendingList(pending.slice(0, 5));
+        setActiveList(active.slice(0, 5));
+
+        // Intelligently default tab to whichever has actionable items
+        if (highRiskPatients.length > 0) {
+          setActiveTab('priority');
+        } else if (pending.length > 0) {
           setActiveTab('pending');
+        } else {
+          setActiveTab('active');
         }
       }
     } catch (err) {
@@ -214,17 +233,38 @@ export function PatientQueueTable({ search = "", riskFilter = "all", statusFilte
             <p className="text-[11px] text-slate-500 mt-0.5">Prioritized intake and active cohort monitoring</p>
           </div>
           
-          {/* Segmented Queue Tab Controls */}
+          {/* Segmented Queue Tab Controls with Synced Counts */}
           <div className="flex p-1 bg-slate-200/70 rounded-xl w-full sm:w-auto border border-slate-300/60 shadow-2xs">
+            {/* Tab 1: Priority Queue */}
+            <button 
+              onClick={() => setActiveTab('priority')}
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
+                activeTab === 'priority' 
+                  ? 'bg-white text-slate-900 shadow-xs' 
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <AlertTriangle className={`h-3.5 w-3.5 ${activeTab === 'priority' ? 'text-red-600' : 'text-slate-400'}`} />
+              <span>Priority</span>
+              {totalPriorityCount > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                  activeTab === 'priority' ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-slate-300 text-slate-700'
+                }`}>
+                  {totalPriorityCount}
+                </span>
+              )}
+            </button>
+
+            {/* Tab 2: Verification Requests */}
             <button 
               onClick={() => setActiveTab('pending')}
-              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold text-xs transition-all ${
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
                 activeTab === 'pending' 
                   ? 'bg-white text-slate-900 shadow-xs' 
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <span>Action Required</span>
+              <span>Requests</span>
               {pendingList.length > 0 && (
                 <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
                   activeTab === 'pending' ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-slate-300 text-slate-700'
@@ -234,9 +274,10 @@ export function PatientQueueTable({ search = "", riskFilter = "all", statusFilte
               )}
             </button>
 
+            {/* Tab 3: Recent Active */}
             <button 
               onClick={() => setActiveTab('active')}
-              className={`flex-1 sm:flex-initial flex items-center justify-center px-3.5 py-1.5 rounded-lg font-bold text-xs transition-all ${
+              className={`flex-1 sm:flex-initial flex items-center justify-center px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
                 activeTab === 'active' 
                   ? 'bg-white text-slate-900 shadow-xs' 
                   : 'text-slate-600 hover:text-slate-900'
@@ -258,58 +299,126 @@ export function PatientQueueTable({ search = "", riskFilter = "all", statusFilte
         ) : (
           <div className="flex-1 overflow-x-auto">
             
-            {/* PENDING / ACTION REQUIRED TAB */}
-            {activeTab === 'pending' && (
-              pendingList.length === 0 ? (
+            {/* 1. PRIORITY QUEUE TAB (HIGH RISK CASES) */}
+            {activeTab === 'priority' && (
+              priorityList.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center px-4">
                   <div className="h-12 w-12 bg-teal-50 border border-teal-200 rounded-full flex items-center justify-center mb-3">
                     <ShieldCheck className="h-6 w-6 text-teal-700" />
                   </div>
-                  <p className="text-slate-900 font-bold text-sm">Intake Queue Clear</p>
-                  <p className="text-slate-500 text-xs mt-0.5">There are no pending patient connection requests awaiting review.</p>
+                  <p className="text-slate-900 font-bold text-sm">Priority Queue Clear</p>
+                  <p className="text-slate-500 text-xs mt-0.5">No active patients currently flagged for critical triage or high risk.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="px-6 py-2 bg-red-50/60 border-b border-red-100 flex items-center justify-between text-xs">
+                    <span className="font-semibold text-red-800">
+                      Showing {priorityList.length} of {totalPriorityCount} priority cases
+                    </span>
+                    {totalPriorityCount > 5 && (
+                      <button
+                        onClick={() => navigate("/doctor/patients?risk=high-risk")}
+                        className="font-bold text-teal-800 hover:underline flex items-center gap-1"
+                      >
+                        View all priority patients ({totalPriorityCount}) →
+                      </button>
+                    )}
+                  </div>
+
+                  <Table>
+                    <TableHeader className="bg-slate-50/90 border-b border-slate-200">
+                      <TableRow className="hover:bg-transparent border-slate-200">
+                        <TableHead className="text-[11px] font-bold uppercase tracking-wider text-slate-600 pl-6 h-10">Patient Profile</TableHead>
+                        <TableHead className="text-[11px] font-bold uppercase tracking-wider text-slate-600 h-10">Triage Risk</TableHead>
+                        <TableHead className="text-[11px] font-bold uppercase tracking-wider text-slate-600 text-right pr-6 h-10"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {priorityList.map((item) => {
+                        const profile = Array.isArray(item.profiles) ? item.profiles[0] : item.profiles;
+                        const patientName = sanitizeText(profile?.full_name) || "Unknown Patient";
+
+                        return (
+                          <TableRow 
+                            key={item.patient_id} 
+                            onClick={() => navigate(`/doctor/patient-details/${item.patient_id}`)}
+                            className="hover:bg-slate-50/80 border-b border-slate-100 transition-colors cursor-pointer group"
+                          >
+                            <TableCell className="pl-6 py-3">
+                              <div className="flex items-center gap-3">
+                                <div className="h-9 w-9 rounded-xl bg-slate-100 border border-slate-200 shadow-2xs flex items-center justify-center overflow-hidden shrink-0">
+                                  {profile?.avatar_url ? (
+                                    <img src={profile.avatar_url} alt={patientName} className="h-full w-full object-cover" />
+                                  ) : (
+                                    <span className="text-xs font-bold text-teal-800 bg-teal-50 h-full w-full flex items-center justify-center">
+                                      {getInitials(patientName)}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="font-semibold text-xs text-slate-900 group-hover:text-teal-700 transition-colors">
+                                  {patientName}
+                                </span>
+                              </div>
+                            </TableCell>
+
+                            <TableCell>
+                              <Badge variant="outline" className={`rounded-md text-[10px] px-2 py-0.5 uppercase tracking-wide border ${getRiskColor(profile?.risk_level)}`}>
+                                {profile?.risk_level || "High Risk"}
+                              </Badge>
+                            </TableCell>
+
+                            <TableCell className="pr-6 text-right whitespace-nowrap">
+                              <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-teal-700 group-hover:translate-x-0.5 transition-all inline-block" />
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </>
+              )
+            )}
+
+            {/* 2. PENDING REQUESTS TAB */}
+            {activeTab === 'pending' && (
+              pendingList.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+                  <div className="h-12 w-12 bg-slate-100 rounded-full flex items-center justify-center mb-3">
+                    <Inbox className="h-6 w-6 text-slate-400" />
+                  </div>
+                  <p className="text-slate-900 font-bold text-sm">No Pending Requests</p>
+                  <p className="text-slate-500 text-xs mt-0.5">All patient connection requests have been reviewed.</p>
                 </div>
               ) : (
                 <Table>
                   <TableHeader className="bg-slate-50/90 border-b border-slate-200">
                     <TableRow className="hover:bg-transparent border-slate-200">
                       <TableHead className="text-[11px] font-bold uppercase tracking-wider text-slate-600 pl-6 h-10">Patient Profile</TableHead>
-                      <TableHead className="text-[11px] font-bold uppercase tracking-wider text-slate-600 h-10">Triage Risk</TableHead>
                       <TableHead className="text-[11px] font-bold uppercase tracking-wider text-slate-600 h-10">Requested</TableHead>
-                      <TableHead className="text-[11px] font-bold uppercase tracking-wider text-slate-600 text-right pr-6 h-10">Decisions</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider text-slate-600 text-right pr-6 h-10">Decision</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {pendingList.map((req) => {
                       const profile = Array.isArray(req.profiles) ? req.profiles[0] : req.profiles;
                       const isProcessing = processingId === req.patient_id;
-                      const patientName = profile?.full_name || "Unknown Patient";
+                      const patientName = sanitizeText(profile?.full_name) || "Unknown Patient";
 
                       return (
                         <TableRow key={req.patient_id} className="hover:bg-slate-50/70 border-b border-slate-100 transition-colors">
                           <TableCell className="pl-6 py-3">
                             <div className="flex items-center gap-3">
-                              {/* Clinical ID Card-Style Avatar */}
-                              <div className="h-10 w-10 rounded-xl bg-slate-100 border border-slate-200 shadow-2xs flex items-center justify-center overflow-hidden shrink-0">
+                              <div className="h-9 w-9 rounded-xl bg-slate-100 border border-slate-200 shadow-2xs flex items-center justify-center overflow-hidden shrink-0">
                                 {profile?.avatar_url ? (
-                                  <img 
-                                    src={profile.avatar_url} 
-                                    alt={patientName} 
-                                    className="h-full w-full object-cover" 
-                                  />
+                                  <img src={profile.avatar_url} alt={patientName} className="h-full w-full object-cover" />
                                 ) : (
-                                  <span className="text-xs font-bold text-teal-800 bg-teal-50 h-full w-full flex items-center justify-center border border-teal-200/60">
+                                  <span className="text-xs font-bold text-teal-800 bg-teal-50 h-full w-full flex items-center justify-center">
                                     {getInitials(patientName)}
                                   </span>
                                 )}
                               </div>
                               <span className="font-semibold text-xs text-slate-900">{patientName}</span>
                             </div>
-                          </TableCell>
-
-                          <TableCell>
-                            <Badge variant="outline" className={`rounded-md text-[10px] px-2 py-0.5 uppercase tracking-wide border ${getRiskColor(profile?.risk_level)}`}>
-                              {profile?.risk_level || "Pending"}
-                            </Badge>
                           </TableCell>
 
                           <TableCell className="text-xs font-medium text-slate-500 whitespace-nowrap">
@@ -351,7 +460,7 @@ export function PatientQueueTable({ search = "", riskFilter = "all", statusFilte
               )
             )}
 
-            {/* ACTIVE RECENT TAB */}
+            {/* 3. RECENT ACTIVE TAB */}
             {activeTab === 'active' && (
               activeList.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center px-4">
@@ -367,38 +476,34 @@ export function PatientQueueTable({ search = "", riskFilter = "all", statusFilte
                     <TableRow className="hover:bg-transparent border-slate-200">
                       <TableHead className="text-[11px] font-bold uppercase tracking-wider text-slate-600 pl-6 h-10">Patient Profile</TableHead>
                       <TableHead className="text-[11px] font-bold uppercase tracking-wider text-slate-600 h-10">Triage Risk</TableHead>
-                      <TableHead className="text-[11px] font-bold uppercase tracking-wider text-slate-600 text-right pr-6 h-10">Clinical Action</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider text-slate-600 text-right pr-6 h-10"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {activeList.map((req) => {
                       const profile = Array.isArray(req.profiles) ? req.profiles[0] : req.profiles;
-                      const patientName = profile?.full_name || "Unknown Patient";
+                      const patientName = sanitizeText(profile?.full_name) || "Unknown Patient";
 
                       return (
-                        <TableRow key={req.patient_id} className="hover:bg-slate-50/70 border-b border-slate-100 transition-colors">
+                        <TableRow 
+                          key={req.patient_id} 
+                          onClick={() => navigate(`/doctor/patient-details/${req.patient_id}`)}
+                          className="hover:bg-slate-50/80 border-b border-slate-100 transition-colors cursor-pointer group"
+                        >
                           <TableCell className="pl-6 py-3">
                             <div className="flex items-center gap-3">
-                              {/* Clinical ID Card-Style Avatar */}
-                              <div className="h-10 w-10 rounded-xl bg-slate-100 border border-slate-200 shadow-2xs flex items-center justify-center overflow-hidden shrink-0">
+                              <div className="h-9 w-9 rounded-xl bg-slate-100 border border-slate-200 shadow-2xs flex items-center justify-center overflow-hidden shrink-0">
                                 {profile?.avatar_url ? (
-                                  <img 
-                                    src={profile.avatar_url} 
-                                    alt={patientName} 
-                                    className="h-full w-full object-cover" 
-                                  />
+                                  <img src={profile.avatar_url} alt={patientName} className="h-full w-full object-cover" />
                                 ) : (
-                                  <span className="text-xs font-bold text-teal-800 bg-teal-50 h-full w-full flex items-center justify-center border border-teal-200/60">
+                                  <span className="text-xs font-bold text-teal-800 bg-teal-50 h-full w-full flex items-center justify-center">
                                     {getInitials(patientName)}
                                   </span>
                                 )}
                               </div>
-                              <button
-                                onClick={() => navigate(`/doctor/patient-details/${req.patient_id}`)}
-                                className="font-semibold text-xs text-slate-900 hover:text-teal-700 transition-colors text-left"
-                              >
+                              <span className="font-semibold text-xs text-slate-900 group-hover:text-teal-700 transition-colors">
                                 {patientName}
-                              </button>
+                              </span>
                             </div>
                           </TableCell>
 
@@ -409,15 +514,7 @@ export function PatientQueueTable({ search = "", riskFilter = "all", statusFilte
                           </TableCell>
 
                           <TableCell className="pr-6 text-right whitespace-nowrap">
-                            <Button 
-                              size="sm" 
-                              variant="ghost" 
-                              onClick={() => navigate(`/doctor/patient-details/${req.patient_id}`)}
-                              className="h-8 text-xs font-bold text-teal-700 hover:bg-teal-50 hover:text-teal-900 rounded-lg gap-1"
-                            >
-                              <span>Open Chart</span>
-                              <ArrowRight className="h-3.5 w-3.5" />
-                            </Button>
+                            <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-teal-700 group-hover:translate-x-0.5 transition-all inline-block" />
                           </TableCell>
                         </TableRow>
                       );

@@ -14,19 +14,84 @@ import {
   MonitorSmartphone, 
   CalendarClock, 
   Save, 
-  Clock, 
-  SlidersHorizontal,
-  Check
+  Clock,
 } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup
 } from "@/components/ui/select";
 import { useLanguage } from "../admin/LanguageContext"; 
 
+const sanitizeText = (input: string | null | undefined): string => {
+  if (!input) return "";
+  return input
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/<[^>]*>/g, "")
+    .trim();
+};
+
+// Generates time slots in 15-minute intervals using unified 12-hour AM/PM values
+const generateTimeSlots12Hr = () => {
+  const slots: { value: string; label: string }[] = [];
+  for (let i = 5; i <= 22; i++) {
+    for (let j = 0; j < 60; j += 15) {
+      const min = j.toString().padStart(2, '0');
+      const hour12 = i % 12 === 0 ? 12 : i % 12;
+      const ampm = i >= 12 ? 'PM' : 'AM';
+      const label = `${hour12}:${min} ${ampm}`;
+      slots.push({ value: label, label });
+    }
+  }
+  return slots;
+};
+
+const normalizeTo12Hr = (raw: string | null | undefined, fallback: string): string => {
+  if (!raw) return fallback;
+  const cleaned = raw.trim();
+
+  const match12 = cleaned.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (match12) {
+    const h = parseInt(match12[1], 10);
+    const m = match12[2];
+    const ampm = match12[3].toUpperCase();
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${h12}:${m} ${ampm}`;
+  }
+
+  const matchShort = cleaned.match(/^(\d{1,2})\s*(am|pm)$/i);
+  if (matchShort) {
+    const h = parseInt(matchShort[1], 10);
+    const ampm = matchShort[2].toUpperCase();
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${h12}:00 ${ampm}`;
+  }
+
+  const match24 = cleaned.match(/^([01]?\d|2[0-3]):(\d{2})$/);
+  if (match24) {
+    const h24 = parseInt(match24[1], 10);
+    const m = match24[2];
+    const ampm = h24 >= 12 ? "PM" : "AM";
+    const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+    return `${h12}:${m} ${ampm}`;
+  }
+
+  return fallback;
+};
+
+const timeToMinutes = (time12Hr: string): number => {
+  const match = time12Hr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return 0;
+  let h = parseInt(match[1], 10);
+  const m = parseInt(match[2], 10);
+  const ampm = match[3].toUpperCase();
+  if (ampm === "PM" && h !== 12) h += 12;
+  if (ampm === "AM" && h === 12) h = 0;
+  return h * 60 + m;
+};
+
 const translations = {
   en: {
     pageTitle: "System Settings & Preferences",
-    pageSubtitle: "Configure clinical alerts, consultation duty hours, and display preferences",
+    pageSubtitle: "Configure clinical alerts, Consultation & Duty Hours, and display preferences",
     notifTitle: "Clinical Notifications & Triage Alerts",
     notifDesc: "Configure automated notification channels for priority patients and daily medication logs",
     patientAlerts: "High-Risk Patient Triage Alerts",
@@ -46,10 +111,12 @@ const translations = {
     dashboard: "Clinical Overview Dashboard",
     queue: "Patient Intake Queue",
     appointments: "Follow-up Roadmap Tracker",
-    scheduleTitle: "Consultation Duty Schedule",
-    scheduleDesc: "Set your weekly clinic duty hours for patient appointments and mobile companion availability",
-    workHours: "Consultation Working Hours",
+    scheduleTitle: "Consultation & Duty Hours",
+    scheduleDesc: "Set your weekly Consultation & Duty Hours for patient appointments and mobile companion availability",
+    workHours: "Consultation & Duty Hours",
     workHoursDesc: "Active clinic duty hours displayed to patients on the TEREA companion app",
+    startHourLabel: "Duty Start Time",
+    endHourLabel: "Duty End Time",
     to: "to",
     apptDuration: "Default Consultation Slot Duration",
     apptDurationDesc: "Allocated diagnostic review duration per patient consultation",
@@ -60,12 +127,12 @@ const translations = {
     saveBtn: "Save All Preferences",
     savingBtn: "Saving Preferences...",
     successTitle: "Preferences Updated",
-    successDesc: "Your clinical preferences and duty hours have been successfully saved.",
+    successDesc: "Your clinical preferences and Consultation & Duty Hours have been successfully saved.",
     okBtn: "Acknowledge"
   },
   fil: {
     pageTitle: "Mga Setting ng Sistema",
-    pageSubtitle: "Pamahalaan ang mga alerto sa klinika, oras ng duty, at mga kagustuhan sa display",
+    pageSubtitle: "Pamahalaan ang mga alerto sa klinika, Consultation & Duty Hours, at mga kagustuhan sa display",
     notifTitle: "Mga Abiso sa Klinika at Triage",
     notifDesc: "I-configure ang mga abiso para sa mga pasyenteng may mataas na panganib at tala sa gamutan",
     patientAlerts: "Mga Alerto sa Mataas na Panganib",
@@ -85,10 +152,12 @@ const translations = {
     dashboard: "Dashboard ng Klinika",
     queue: "Pila ng Pasyente",
     appointments: "Tagasubaybay ng Follow-up",
-    scheduleTitle: "Iskedyul ng Duty at Konsultasyon",
+    scheduleTitle: "Consultation & Duty Hours",
     scheduleDesc: "I-set ang iyong oras ng availability sa health center para sa mga pasyente",
-    workHours: "Oras ng Konsultasyon",
+    workHours: "Consultation & Duty Hours",
     workHoursDesc: "Oras ng duty na makikita ng mga pasyente sa TEREA mobile app",
+    startHourLabel: "Oras ng Simula",
+    endHourLabel: "Oras ng Pagtatapos",
     to: "hanggang",
     apptDuration: "Tagal ng Bawat Konsultasyon",
     apptDurationDesc: "Inilaang oras para sa pagsusuri ng bawat pasyente",
@@ -99,28 +168,9 @@ const translations = {
     saveBtn: "I-save ang Lahat ng Setting",
     savingBtn: "Nagse-save...",
     successTitle: "Na-update ang mga Setting",
-    successDesc: "Matagumpay na na-save ang iyong mga kagustuhan at iskedyul ng duty.",
+    successDesc: "Matagumpay na na-save ang iyong mga kagustuhan at Consultation & Duty Hours.",
     okBtn: "Sige"
   }
-};
-
-// Generates time slots in 15-minute intervals
-const generateTimeSlots = () => {
-  const slots = [];
-  for (let i = 5; i <= 22; i++) {
-    for (let j = 0; j < 60; j += 15) {
-      const hour24 = i.toString().padStart(2, '0');
-      const min = j.toString().padStart(2, '0');
-      const val = `${hour24}:${min}`;
-      
-      const hour12 = i % 12 === 0 ? 12 : i % 12;
-      const ampm = i >= 12 ? 'PM' : 'AM';
-      const label = `${hour12}:${min} ${ampm}`;
-      
-      slots.push({ value: val, label });
-    }
-  }
-  return slots;
 };
 
 export default function DoctorSettings() {
@@ -133,8 +183,9 @@ export default function DoctorSettings() {
   const [userId, setUserId] = useState<string | null>(null);
   const [doctorName, setDoctorName] = useState("Doctor");
   const [isSaving, setIsSaving] = useState(false);
+  const [scheduleError, setScheduleError] = useState("");
   
-  const TIME_SLOTS = useMemo(() => generateTimeSlots(), []);
+  const TIME_SLOTS = useMemo(() => generateTimeSlots12Hr(), []);
 
   const [settings, setSettings] = useState({
     patientAlerts: true, 
@@ -143,13 +194,31 @@ export default function DoctorSettings() {
     emailNotifs: false,
     language: globalLang,
     defaultView: "dashboard",
-    startHour: "08:00", 
-    endHour: "17:00", 
+    startHour: "8:00 AM", 
+    endHour: "5:00 PM", 
     duration: "30",
   });
 
   useEffect(() => {
-    const fetchUserData = async () => {
+    const loadSettingsAndProfile = async () => {
+      // 1. Load local preferences first
+      const savedSettings = localStorage.getItem("doctorSystemSettings");
+      if (savedSettings) {
+        try {
+          const parsed = JSON.parse(savedSettings);
+          setSettings(prev => ({
+            ...prev,
+            ...parsed,
+            language: parsed.language || globalLang,
+            startHour: normalizeTo12Hr(parsed.startHour, prev.startHour),
+            endHour: normalizeTo12Hr(parsed.endHour, prev.endHour),
+          }));
+        } catch (e) {
+          console.error("Failed to parse settings:", e);
+        }
+      }
+
+      // 2. Fetch authoritative duty hours & name from Supabase profiles table
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setUserId(user.id);
@@ -160,39 +229,43 @@ export default function DoctorSettings() {
           .single();
           
         if (profileData) {
-          setDoctorName(profileData.full_name || "Doctor");
+          setDoctorName(sanitizeText(profileData.full_name) || "Doctor");
+          const syncedStart = normalizeTo12Hr(profileData.start_hour, "8:00 AM");
+          const syncedEnd = normalizeTo12Hr(profileData.end_hour, "5:00 PM");
+
           setSettings(prev => ({
             ...prev,
-            startHour: profileData.start_hour || prev.startHour,
-            endHour: profileData.end_hour || prev.endHour
+            startHour: syncedStart,
+            endHour: syncedEnd,
           }));
         }
       }
     };
-    fetchUserData();
 
-    const savedSettings = localStorage.getItem("doctorSystemSettings");
-    if (savedSettings) {
-      try {
-        const parsed = JSON.parse(savedSettings);
-        setSettings(prev => ({ 
-          ...parsed, 
-          language: parsed.language || globalLang, 
-          startHour: prev.startHour, 
-          endHour: prev.endHour 
-        }));
-      } catch (e) {
-        console.error("Failed to parse settings:", e);
-      }
-    }
+    loadSettingsAndProfile();
   }, [globalLang]);
 
-  const update = (key: string, value: any) => setSettings(prev => ({ ...prev, [key]: value }));
+  const update = (key: string, value: any) => {
+    if (key === "startHour" || key === "endHour") {
+      setScheduleError("");
+    }
+    setSettings(prev => ({ ...prev, [key]: value }));
+  };
 
   const currentLang = settings.language as 'en' | 'fil';
   const t = (key: keyof typeof translations.en) => translations[currentLang][key] || translations.en[key];
 
   const handleSave = async () => {
+    const startMins = timeToMinutes(settings.startHour);
+    const endMins = timeToMinutes(settings.endHour);
+
+    if (endMins <= startMins) {
+      const msg = "Duty End Time must be later than Duty Start Time.";
+      setScheduleError(msg);
+      triggerAlert("Validation Error", msg, "error");
+      return;
+    }
+
     setIsSaving(true);
     try {
       localStorage.setItem("doctorSystemSettings", JSON.stringify(settings));
@@ -207,6 +280,13 @@ export default function DoctorSettings() {
           .eq('id', userId);
           
         if (error) throw error;
+
+        await supabase.from('activity_logs').insert([{
+          doctor_id: userId,
+          action: 'Profile Update',
+          patient: '—',
+          details: `Updated Consultation & Duty Hours (${settings.startHour} – ${settings.endHour}).`
+        }]);
       }
       
       window.dispatchEvent(new Event("settingsUpdated"));
@@ -220,10 +300,11 @@ export default function DoctorSettings() {
     }
   };
 
-  const cleanDoctorName = doctorName.replace(/^(dr\.?\s*)+/i, "").trim() || "Doctor";
+  const sanitizedDoctorName = sanitizeText(doctorName) || "Doctor";
+  const cleanDoctorName = sanitizedDoctorName.replace(/^(dr\.?\s*)+/i, "").trim() || "Doctor";
 
   return (
-    <DashboardLayout role="doctor" userName={doctorName}>
+    <DashboardLayout role="doctor" userName={sanitizedDoctorName}>
       
       {/* Centralized Notification Modal */}
       <Dialog open={alert.open} onOpenChange={(open) => setAlert({...alert, open})}>
@@ -247,7 +328,7 @@ export default function DoctorSettings() {
 
       <div className="mx-auto max-w-5xl space-y-6 animate-fade-in font-sans pb-12">
         
-        {/* --- PAGE HEADER BANNER --- */}
+        {/* --- PAGE HEADER BANNER (Duplicate Save Button Removed) --- */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white p-6 rounded-2xl border border-slate-300/80 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
           <div className="space-y-1">
             <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200">
@@ -258,17 +339,6 @@ export default function DoctorSettings() {
             <p className="text-slate-500 text-xs font-normal">
               {t("pageSubtitle")} • Dr. {cleanDoctorName}
             </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button 
-              disabled={isSaving} 
-              onClick={handleSave} 
-              className="bg-teal-700 hover:bg-teal-800 text-white rounded-xl h-10 px-6 text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-70"
-            >
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {isSaving ? t("savingBtn") : t("saveBtn")}
-            </Button>
           </div>
         </div>
 
@@ -407,7 +477,7 @@ export default function DoctorSettings() {
             </CardContent>
           </Card>
 
-          {/* --- SECTION 3: CONSULTATION DUTY SCHEDULE --- */}
+          {/* --- SECTION 3: CONSULTATION & DUTY HOURS (Unified with Physician Profile) --- */}
           <Card className="rounded-2xl border border-slate-300/80 bg-white shadow-sm overflow-hidden">
             <CardHeader className="pb-3.5 border-b border-slate-100 bg-slate-50/70">
               <div className="flex items-center gap-2.5">
@@ -422,17 +492,18 @@ export default function DoctorSettings() {
             </CardHeader>
             <CardContent className="p-5 sm:p-6 space-y-6">
               
-              {/* Working Duty Hours */}
+              {/* Consultation & Duty Hours */}
               <div className="space-y-2.5">
                 <div className="space-y-0.5">
                   <Label className="font-bold text-slate-800 text-xs uppercase tracking-wider">{t("workHours")}</Label>
                   <p className="text-[11px] text-slate-500">{t("workHoursDesc")}</p>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-center gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
                   
-                  {/* Start Hour Selector */}
-                  <div className="w-full sm:flex-1">
+                  {/* Duty Start Time Selector */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-500">{t("startHourLabel")}</Label>
                     <Select value={settings.startHour} onValueChange={(v) => update("startHour", v)}>
                       <SelectTrigger className="w-full h-10 rounded-xl bg-white border-slate-300 text-xs font-bold text-slate-900 focus-visible:border-teal-700 focus-visible:ring-teal-700 shadow-2xs">
                         <div className="flex items-center gap-2">
@@ -451,15 +522,14 @@ export default function DoctorSettings() {
                       </SelectContent>
                     </Select>
                   </div>
-
-                  <span className="text-slate-400 font-bold uppercase text-[11px] tracking-wider shrink-0 px-1">
-                    {t("to")}
-                  </span>
                   
-                  {/* End Hour Selector */}
-                  <div className="w-full sm:flex-1">
+                  {/* Duty End Time Selector */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-500">{t("endHourLabel")}</Label>
                     <Select value={settings.endHour} onValueChange={(v) => update("endHour", v)}>
-                      <SelectTrigger className="w-full h-10 rounded-xl bg-white border-slate-300 text-xs font-bold text-slate-900 focus-visible:border-teal-700 focus-visible:ring-teal-700 shadow-2xs">
+                      <SelectTrigger className={`w-full h-10 rounded-xl bg-white text-xs font-bold text-slate-900 shadow-2xs ${
+                        scheduleError ? "border-red-500 focus-visible:ring-red-500" : "border-slate-300 focus-visible:border-teal-700 focus-visible:ring-teal-700"
+                      }`}>
                         <div className="flex items-center gap-2">
                           <Clock className="w-3.5 h-3.5 text-teal-700 shrink-0" />
                           <SelectValue placeholder="Select End Time" />
@@ -477,6 +547,13 @@ export default function DoctorSettings() {
                     </Select>
                   </div>
                 </div>
+
+                {scheduleError && (
+                  <p className="text-[11px] font-semibold text-red-600 flex items-center gap-1 pt-1">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                    {scheduleError}
+                  </p>
+                )}
               </div>
 
               {/* Consultation Duration */}
@@ -500,7 +577,7 @@ export default function DoctorSettings() {
             </CardContent>
           </Card>
 
-          {/* Bottom Action Footer */}
+          {/* Single Bottom Save Action Button */}
           <div className="flex justify-end pt-2">
             <Button 
               disabled={isSaving} 

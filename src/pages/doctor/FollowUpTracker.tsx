@@ -12,13 +12,21 @@ import {
 import { 
   Search, Calendar, CheckCircle2, Clock, CheckCircle, AlertCircle, 
   Eye, ArrowUpDown, ChevronLeft, ChevronRight, Filter, Pill, Activity,
-  ListOrdered, MapPin, ExternalLink, Loader2, Check, ShieldAlert, X
+  ListOrdered, MapPin, ExternalLink, Loader2, Check, ShieldAlert, X, MoreVertical
 } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "../../lib/supabase";
 import { useLanguage } from "../admin/LanguageContext";
+
+const sanitizeText = (input: string | null | undefined): string => {
+  if (!input) return "";
+  return input
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/<[^>]*>/g, "")
+    .trim();
+};
 
 const translations: Record<string, Record<string, string>> = {
   en: {
@@ -32,11 +40,13 @@ const translations: Record<string, Record<string, string>> = {
     roadmapSchedule: "Active Surveillance Queue",
     searchPlaceholder: "Search patient name, milestone, or regimen...",
     loading: "Loading active surveillance schedule...",
-    patient: "Patient & Target Milestone",
+    patient: "Patient",
+    milestone: "Target Milestone",
+    category: "Treatment Category",
     age: "Age",
     date: "Scheduled Milestone Date",
     status: "Treatment Status",
-    actions: "Clinical Actions",
+    actions: "Actions",
     noMilestones: "No pending roadmap milestones found for active patients.",
     unknownPatient: "Unknown Patient",
     patientInfo: "Patient Chart",
@@ -59,6 +69,7 @@ const translations: Record<string, Record<string, string>> = {
     to: "to",
     of: "of",
     entries: "entries",
+    rowsPerPage: "Rows per page:",
     resetFilters: "Reset Filters",
     protocolBreakdown: "Regimen Stratification"
   },
@@ -73,11 +84,13 @@ const translations: Record<string, Record<string, string>> = {
     roadmapSchedule: "Iskedyul ng Aktibong Gamutan",
     searchPlaceholder: "Maghanap ng pasyente o milestone...",
     loading: "Nilo-load ang iskedyul...",
-    patient: "Pasyente at Target na Milestone",
+    patient: "Pasyente",
+    milestone: "Target na Milestone",
+    category: "Kategorya ng Gamutan",
     age: "Edad",
     date: "Araw ng Iskedyul",
     status: "Katayuan ng Gamutan",
-    actions: "Mga Aksyon",
+    actions: "Aksyon",
     noMilestones: "Walang nakitang nakabinbing milestone para sa mga aktibong pasyente.",
     unknownPatient: "Hindi Kilalang Pasyente",
     patientInfo: "Chart ng Pasyente",
@@ -100,6 +113,7 @@ const translations: Record<string, Record<string, string>> = {
     to: "hanggang",
     of: "ng",
     entries: "tala",
+    rowsPerPage: "Bilang sa bawat pahina:",
     resetFilters: "I-reset ang mga Filter",
     protocolBreakdown: "Kategorya ng Protokol"
   }
@@ -164,12 +178,13 @@ export default function FollowUpTracker() {
 
   const [followUps, setFollowUps] = useState<Appointment[]>([]);
   const [search, setSearch] = useState("");
-  // Urgency filter driven by clicking KPI cards: 'all' | 'overdue' | 'this-week' | 'upcoming'
   const [urgencyFilter, setUrgencyFilter] = useState<"all" | "overdue" | "this-week" | "upcoming">("all");
   const [sortOrder, setSortOrder] = useState("name-asc");
   const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(10);
   const [loading, setLoading] = useState(true);
   const [doctorName, setDoctorName] = useState(""); 
+  const [openMenuId, setOpenMenuId] = useState<string | number | null>(null);
 
   // Quickview Milestones State
   const [quickviewOpen, setQuickviewOpen] = useState(false);
@@ -182,7 +197,12 @@ export default function FollowUpTracker() {
   const [milestoneToComplete, setMilestoneToComplete] = useState<any | null>(null);
   const [completingMilestone, setCompletingMilestone] = useState(false);
 
-  const ITEMS_PER_PAGE = 10;
+  // Close kebab menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => setOpenMenuId(null);
+    window.addEventListener("click", handleClickOutside);
+    return () => window.removeEventListener("click", handleClickOutside);
+  }, []);
 
   const fetchAppointments = async () => {
     try {
@@ -196,7 +216,7 @@ export default function FollowUpTracker() {
         .eq('id', user.id)
         .single();
         
-      if (profile) setDoctorName(profile.full_name);
+      if (profile) setDoctorName(sanitizeText(profile.full_name) || "Doctor");
 
       // Fetch pending milestones strictly for patients who are NOT discharged
       const { data, error } = await supabase
@@ -217,21 +237,18 @@ export default function FollowUpTracker() {
         const p = Array.isArray(item.patient) ? item.patient[0] : item.patient;
         const rawStatus = p?.status?.toLowerCase() || "";
 
-        // STRICT FILTER: Exclude any patient who is already cured, completed, or discharged.
-        // Only active patients undergoing treatment appear here.
         const isDischarged = rawStatus === "cured" || rawStatus === "completed" || rawStatus === "treatment_completed";
         if (isDischarged) return acc;
 
-        // Keep earliest upcoming appointment per active patient
         if (!uniquePatientsMap.has(item.patient_id)) {
           uniquePatientsMap.set(item.patient_id, true);
 
           acc.push({
             ...item,
             patient: p,
-            title: item.title,
+            title: sanitizeText(item.title),
             type: item.type,
-            patientName: p?.full_name || t("unknownPatient"),
+            patientName: sanitizeText(p?.full_name) || t("unknownPatient"),
             patientAge: (p?.age !== null && p?.age !== undefined && p?.age !== "") ? p.age.toString() : "--",
             patientStatus: t("inTreatment"),
             patientRegimen: formatRegimenName(p?.tb_regimen || "Category I (6-Month)")
@@ -259,7 +276,7 @@ export default function FollowUpTracker() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, urgencyFilter, sortOrder]);
+  }, [search, urgencyFilter, sortOrder, itemsPerPage]);
 
   const handleOpenQuickview = async (item: Appointment) => {
     setSelectedPatientForQuickview(item);
@@ -320,7 +337,7 @@ export default function FollowUpTracker() {
     navigate(`/doctor/patient-details/${patientId}?tab=roadmap`);
   };
 
-  // KPI Calculations (100% of counts now represent active patients only)
+  // KPI Calculations
   const generateStats = () => {
     const defaultStats = { count: 0, protocols: {} as Record<string, number> };
     const stats = {
@@ -373,8 +390,11 @@ export default function FollowUpTracker() {
     return 0;
   });
 
-  const totalPages = Math.ceil(processedFollowUps.length / ITEMS_PER_PAGE);
-  const paginatedFollowUps = processedFollowUps.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const totalPages = Math.max(1, Math.ceil(processedFollowUps.length / itemsPerPage));
+  const paginatedFollowUps = processedFollowUps.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   const ProtocolBreakdown = ({ protocols }: { protocols: Record<string, number> }) => {
     const entries = Object.entries(protocols).sort((a, b) => b[1] - a[1]);
@@ -392,10 +412,11 @@ export default function FollowUpTracker() {
     );
   };
 
-  const cleanDoctorName = doctorName.replace(/^(dr\.?\s*)+/i, "").trim() || "Doctor";
+  const sanitizedDoctorName = sanitizeText(doctorName) || "Doctor";
+  const cleanDoctorName = sanitizedDoctorName.replace(/^(dr\.?\s*)+/i, "").trim() || "Doctor";
 
   return (
-    <DashboardLayout role="doctor" userName={doctorName || "Doctor"}>
+    <DashboardLayout role="doctor" userName={sanitizedDoctorName}>
       
       {/* Centralized Notification Modal */}
       <Dialog open={alert.open} onOpenChange={(open) => setAlert({...alert, open})}>
@@ -512,7 +533,7 @@ export default function FollowUpTracker() {
                         </div>
                         <div>
                           <p className={`text-sm font-bold ${isDone ? 'line-through text-slate-500' : 'text-slate-900'}`}>
-                            {m.title || "Clinical Follow-up"}
+                            {sanitizeText(m.title) || "Clinical Follow-up"}
                           </p>
                           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-1">
                             <span className="flex items-center gap-1 font-semibold text-slate-700">
@@ -521,7 +542,7 @@ export default function FollowUpTracker() {
                             </span>
                             <span className="flex items-center gap-1">
                               <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                              {m.location || "Carmona Health Center"}
+                              {sanitizeText(m.location) || "Carmona Health Center"}
                             </span>
                           </div>
                         </div>
@@ -712,8 +733,8 @@ export default function FollowUpTracker() {
         </div>
 
         {/* --- ROADMAP SURVEILLANCE QUEUE TABLE --- */}
-        <Card className="border-slate-300/80 shadow-[0_12px_35px_rgba(15,23,42,0.06)] bg-white rounded-2xl overflow-hidden">
-          <CardHeader className="pb-4 border-b border-slate-100 bg-slate-50/70">
+        <Card className="border-slate-300/80 shadow-[0_12px_35px_rgba(15,23,42,0.06)] bg-white rounded-2xl overflow-visible">
+          <CardHeader className="pb-4 border-b border-slate-100 bg-slate-50/70 rounded-t-2xl">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base font-bold flex items-center gap-2 text-slate-900">
                 <Clock className="h-5 w-5 text-teal-700" />
@@ -756,16 +777,30 @@ export default function FollowUpTracker() {
                           <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
                         </div>
                       </TableHead>
-                      <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-600 w-28">{t("age")}</TableHead>
-                      <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-600 w-64">{t("date")}</TableHead>
-                      <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-600 w-44">{t("status")}</TableHead>
-                      <TableHead className="w-72 text-right pr-6 text-xs font-bold uppercase tracking-wider text-slate-600">{t("actions")}</TableHead>
+                      <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                        {t("milestone")}
+                      </TableHead>
+                      <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                        {t("category")}
+                      </TableHead>
+                      <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-600 w-24">
+                        {t("age")}
+                      </TableHead>
+                      <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                        {t("date")}
+                      </TableHead>
+                      <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-600 w-36">
+                        {t("status")}
+                      </TableHead>
+                      <TableHead className="w-20 text-right pr-6 text-xs font-bold uppercase tracking-wider text-slate-600">
+                        {t("actions")}
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {paginatedFollowUps.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-16 text-slate-400 text-sm italic">
+                        <TableCell colSpan={7} className="text-center py-16 text-slate-400 text-sm italic">
                           <div className="space-y-2">
                             <p>{t("noMilestones")}</p>
                             {(urgencyFilter !== "all" || search) && (
@@ -823,27 +858,36 @@ export default function FollowUpTracker() {
                             key={followUp.id}
                             className="border-b border-slate-100 hover:bg-slate-50/70 transition-colors"
                           >
+                            {/* 1. Patient Column */}
                             <TableCell className="pl-6 py-4">
                               <button 
                                 onClick={() => navigateToPatientRoadmap(followUp.patient_id)}
-                                className="font-bold text-base text-slate-900 hover:text-teal-700 transition-colors text-left block"
+                                className="font-bold text-sm text-slate-900 hover:text-teal-700 transition-colors text-left block"
                               >
                                 {followUp.patientName}
                               </button>
-                              <div className="mt-1 flex flex-wrap items-center gap-2">
-                                <span className="text-xs font-bold text-teal-900 bg-teal-50 px-2.5 py-0.5 rounded-md border border-teal-200">
-                                  {followUp.title || "Routine Follow-up"}
-                                </span>
-                                <span className="text-xs text-slate-500 font-medium">
-                                  {followUp.patientRegimen}
-                                </span>
-                              </div>
                             </TableCell>
 
+                            {/* 2. Target Milestone Column */}
+                            <TableCell className="py-4">
+                              <span className="inline-block text-xs font-bold text-teal-900 bg-teal-50 px-2.5 py-1 rounded-md border border-teal-200">
+                                {followUp.title || "Routine Follow-up"}
+                              </span>
+                            </TableCell>
+
+                            {/* 3. Treatment Category Column */}
+                            <TableCell className="py-4">
+                              <span className="text-xs text-slate-700 font-semibold bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200 whitespace-nowrap">
+                                {followUp.patientRegimen}
+                              </span>
+                            </TableCell>
+
+                            {/* 4. Age Column */}
                             <TableCell className="text-sm font-semibold text-slate-700 whitespace-nowrap">
                               {followUp.patientAge} yrs old
                             </TableCell>
 
+                            {/* 5. Scheduled Milestone Date Column */}
                             <TableCell className="py-4">
                               <div className="flex flex-col gap-1">
                                 <span className="text-sm font-bold text-slate-900 whitespace-nowrap">
@@ -855,35 +899,52 @@ export default function FollowUpTracker() {
                               </div>
                             </TableCell>
 
+                            {/* 6. Status Column */}
                             <TableCell className="whitespace-nowrap">
                               <Badge variant="outline" className="rounded-md text-xs px-2.5 py-1 bg-teal-50 text-teal-800 border-teal-200 font-bold">
                                 {t("inTreatment")}
                               </Badge>
                             </TableCell>
 
-                            <TableCell className="text-right pr-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center justify-end gap-2">
-                                {/* Roadmap Timeline Quickview Button */}
-                                <Button 
-                                  variant="outline" 
-                                  size="sm" 
-                                  className="h-9 px-3 text-xs font-bold text-slate-700 border-slate-300 hover:bg-slate-100 rounded-lg gap-1.5 shadow-2xs"
-                                  onClick={() => handleOpenQuickview(followUp)}
+                            {/* 7. Compact Kebab Menu Actions Column */}
+                            <TableCell className="text-right pr-6 py-4 whitespace-nowrap relative">
+                              <div className="inline-block relative" onClick={(e) => e.stopPropagation()}>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                                  onClick={() => setOpenMenuId(openMenuId === followUp.id ? null : followUp.id)}
+                                  title={t("actions")}
                                 >
-                                  <ListOrdered className="w-3.5 h-3.5 text-teal-700" />
-                                  <span>{t("quickView")}</span>
+                                  <MoreVertical className="h-4 w-4" />
                                 </Button>
 
-                                {/* Direct EHR Chart Navigation Button with deep-link to ?tab=roadmap */}
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  className="h-9 px-3 text-xs font-bold text-teal-700 hover:bg-teal-50 hover:text-teal-900 rounded-lg gap-1.5"
-                                  onClick={() => navigateToPatientRoadmap(followUp.patient_id)}
-                                >
-                                  <Eye className="w-3.5 h-3.5 text-teal-700" />
-                                  <span>{t("patientInfo")}</span>
-                                </Button>
+                                {openMenuId === followUp.id && (
+                                  <div className="absolute right-0 mt-1 w-48 rounded-xl bg-white border border-slate-200 shadow-lg py-1.5 z-50 text-left animate-in fade-in zoom-in-95 duration-150">
+                                    <button
+                                      type="button"
+                                      className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-teal-50 hover:text-teal-800 flex items-center gap-2 transition-colors"
+                                      onClick={() => {
+                                        setOpenMenuId(null);
+                                        handleOpenQuickview(followUp);
+                                      }}
+                                    >
+                                      <ListOrdered className="w-3.5 h-3.5 text-teal-700" />
+                                      <span>{t("quickView")}</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-teal-50 hover:text-teal-800 flex items-center gap-2 transition-colors"
+                                      onClick={() => {
+                                        setOpenMenuId(null);
+                                        navigateToPatientRoadmap(followUp.patient_id);
+                                      }}
+                                    >
+                                      <Eye className="w-3.5 h-3.5 text-teal-700" />
+                                      <span>{t("patientInfo")}</span>
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             </TableCell>
                           </TableRow>
@@ -893,19 +954,46 @@ export default function FollowUpTracker() {
                   </TableBody>
                 </Table>
                 
-                {/* --- TABLE PAGINATION --- */}
+                {/* --- UNIFIED TABLE PAGINATION WITH ROWS-PER-PAGE --- */}
                 {!loading && processedFollowUps.length > 0 && (
-                  <div className="flex items-center justify-between border-t border-slate-100 px-6 py-4 bg-slate-50/50">
-                    <div className="text-sm text-slate-600 font-medium">
-                      {t("showing")} {processedFollowUps.length === 0 ? 0 : ((currentPage - 1) * ITEMS_PER_PAGE) + 1} {t("to")} {Math.min(currentPage * ITEMS_PER_PAGE, processedFollowUps.length)} {t("of")} {processedFollowUps.length} {t("entries")}
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-100 px-6 py-4 bg-slate-50/50 rounded-b-2xl">
+                    <div className="flex flex-wrap items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-500 font-semibold">{t("rowsPerPage")}</span>
+                        <Select
+                          value={itemsPerPage.toString()}
+                          onValueChange={(val) => {
+                            setItemsPerPage(Number(val));
+                            setCurrentPage(1);
+                          }}
+                        >
+                          <SelectTrigger className="h-8 w-[70px] rounded-lg bg-white border-slate-300 text-xs font-bold text-slate-700">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="rounded-xl border-slate-200 bg-white">
+                            <SelectItem value="5" className="text-xs">5</SelectItem>
+                            <SelectItem value="10" className="text-xs">10</SelectItem>
+                            <SelectItem value="25" className="text-xs">25</SelectItem>
+                            <SelectItem value="50" className="text-xs">50</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="text-xs text-slate-600 font-medium">
+                        {t("showing")} {processedFollowUps.length === 0 ? 0 : ((currentPage - 1) * itemsPerPage) + 1} {t("to")} {Math.min(currentPage * itemsPerPage, processedFollowUps.length)} {t("of")} {processedFollowUps.length} {t("entries")}
+                      </div>
                     </div>
-                    <div className="flex gap-2">
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-500 mr-1">
+                        Page {currentPage} of {totalPages}
+                      </span>
                       <Button 
                         variant="outline" 
                         size="sm" 
                         onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} 
                         disabled={currentPage === 1} 
-                        className="h-9 w-9 p-0 rounded-lg border-slate-300 text-slate-700 hover:bg-slate-100"
+                        className="h-8 w-8 p-0 rounded-lg border-slate-300 text-slate-700 hover:bg-slate-100"
                       >
                         <ChevronLeft className="h-4 w-4" />
                       </Button>
@@ -914,7 +1002,7 @@ export default function FollowUpTracker() {
                         size="sm" 
                         onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} 
                         disabled={currentPage === totalPages || totalPages === 0} 
-                        className="h-9 w-9 p-0 rounded-lg border-slate-300 text-slate-700 hover:bg-slate-100"
+                        className="h-8 w-8 p-0 rounded-lg border-slate-300 text-slate-700 hover:bg-slate-100"
                       >
                         <ChevronRight className="h-4 w-4" />
                       </Button>
